@@ -33,8 +33,9 @@ PacketHandler::~PacketHandler()
     cmdHandle->deleteLater();
 }
 
-void PacketHandler::parsePacket(const QString& packet, Player* plr)
+void PacketHandler::parsePacket(const QByteArray& packet, Player* plr)
 {
+    QString pkt{ packet };
     if ( plr == nullptr )
         return;
 
@@ -44,20 +45,25 @@ void PacketHandler::parsePacket(const QString& packet, Player* plr)
         if ( !this->checkBannedInfo( plr ) )
         {
             //Prevent Users from Impersonating the Server Admin.
-            if ( Helper::strStartsWithStr( packet, ":SR@" ) )
+            if ( Helper::strStartsWithStr( pkt, ":SR@" ) )
                 return;
 
             //Prevent Users from changing the Server's rules.
-            if ( Helper::strStartsWithStr( packet, ":SR$" ) )
+            if ( Helper::strStartsWithStr( pkt, ":SR$" ) )
                 return;
 
             if ( !plr->getNetworkMuted()
               && plr->getIsVisible() )
             {
-                if ( !pktForge->validateSerNum( plr, packet ) )
-                    return;
+                //Warpath doesn't send packets using SerNums.
+                //Check and skip the validation if this is Warpath.
+                if ( server->getGameId() != Games::W97 )
+                {
+                    if ( !pktForge->validateSerNum( plr, packet ) )
+                        return;
+                }
 
-                this->parseSRPacket( packet, plr );
+                this->parseSRPacket( pkt, plr );
 
                 if ( chatView->getGameID() != Games::Invalid )
                 {
@@ -280,6 +286,14 @@ void PacketHandler::parseUDPPacket(const QByteArray& udp, const
                 break;
                 case 'M':   //Parse the Master Server's response.
                     {
+                        QString msg{ "Got Response from Master [ %1:%2 ]; "
+                                     "it thinks we are [ %3:%4 ]. "
+                                     "( Ping: %5 ms, Avg: %6 ms, "
+                                     "Trend: %7 ms )" };
+
+                                msg = msg.arg( ipAddr.toString() )
+                                         .arg( port );
+
                         //Store the Master Server's Response Time.
                         server->setMasterPingRespTime(
                                     QDateTime::currentMSecsSinceEpoch() );
@@ -303,6 +317,19 @@ void PacketHandler::parseUDPPacket(const QByteArray& udp, const
                             server->setPublicPort(
                                         static_cast<quint16>(
                                             qFromBigEndian( pubPort ) ) );
+
+                            msg = msg.arg( server->getPublicIP() )
+                                     .arg( server->getPublicPort() )
+                                     .arg( QString::number(
+                                               server->getMasterPing() ) )
+                                     .arg( QString::number(
+                                               server->getMasterPingAvg() ) )
+                                     .arg( QString::number(
+                                               server->getMasterPingTrend() ) );
+
+                            Logger::getInstance()->
+                                    insertLog( server->getName(), msg,
+                                               LogTypes::USAGE, true, true );
                         }
                     }
                 break;
@@ -423,7 +450,7 @@ bool PacketHandler::checkBannedInfo(Player* plr) const
         badInfo = true;
     }
 
-    //Disconnect and ban all duplicate IP's if required.
+    //Disconnect and ban duplicate IP's if required.
     if ( !Settings::getAllowDupedIP() )
     {
         for ( int i = 0; i < MAX_PLAYERS; ++i )
@@ -473,8 +500,10 @@ bool PacketHandler::checkBannedInfo(Player* plr) const
                         plr->setDisconnected( true, DCTypes::DupDC );
                     };
 
+                    //Only disconnect the new Player.
+                    //If [Settings::getBanDupedIP()] is true
+                    //the second Player will be removed.
                     disconnect( plr, logMsg, plrMessage );
-                    //disconnect( tmpPlr, logMsg, plrMessage );
 
                     badInfo = true;
                 }
@@ -485,6 +514,8 @@ bool PacketHandler::checkBannedInfo(Player* plr) const
     //Disconnect new Players using the same SerNum as another Player.
     //This is an un-optional disconnect due to how Private chat is handled.
     //Perhaps once a better fix is found we can remove this.
+
+    //Disconnect only the newly connected Player.
     if ( plr != nullptr )
     {
         for ( int i = 0; i < MAX_PLAYERS; ++i )
@@ -547,19 +578,6 @@ void PacketHandler::detectFlooding(Player* plr)
 
                 QString plrMessage{ "Auto-Disconnect; Packet Flooding" };
                 plr->sendMessage( plrMessage, false );
-//                if ( Settings::getBanDeviants() )
-//                {
-//                    logMsg = "Auto-Banish; Suspicious data from: "
-//                             "[ %1 ], [ %2 ]";
-//                    logMsg = logMsg.arg( plr->getPublicIP(),
-//                                         plr->getBioData() );
-
-//                    User::addBan( nullptr, plr, logMsg );
-
-//                    Logger::getInstance()->insertLog( server->getName(),
-//                                                      logMsg, LogTypes::BAN,
-//                                                      true, true );
-//                }
                 plr->setDisconnected( true, DCTypes::PktDC );
             }
         }

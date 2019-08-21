@@ -3,6 +3,7 @@
 #include "packetforge.hpp"
 
 //ReMix includes.
+#include "logger.hpp"
 #include "player.hpp"
 #include "helper.hpp"
 
@@ -12,15 +13,29 @@
 PacketForge* PacketForge::instance{ nullptr };
 PacketForge::PacketForge()
 {
+    QString message{ "Initializing PacketForge module." };
+    Logger::getInstance()->insertLog( "PacketForge", message,
+                                      LogTypes::PktForge, true, true );
+
     pktDecrypt.setFileName( "PacketForge.dll" );
     if ( pktDecrypt.load() )
     {
         decryptPkt = reinterpret_cast<Decrypt>(
                             pktDecrypt.resolve( "decryptPacket" ) );
+
         initialized = true;
+        message =  "Initialized PacketForge module with method "
+                   "[ decryptPacket ].";
+        Logger::getInstance()->insertLog( "PacketForge", message,
+                                          LogTypes::PktForge, true, true );
     }
     else
-        qDebug() << pktDecrypt.errorString();
+    {
+        message = "Unable to initialize PacketForge; Error[ %1 ].";
+        message = message.arg( pktDecrypt.errorString() );
+        Logger::getInstance()->insertLog( "PacketForge", message,
+                                          LogTypes::PktForge, true, true );
+    }
 }
 
 PacketForge::~PacketForge()
@@ -35,7 +50,7 @@ PacketForge* PacketForge::getInstance()
     return instance;
 }
 
-QString PacketForge::decryptPacket(const QString& packet)
+QString PacketForge::decryptPacket(const QByteArray& packet)
 {
     //Player positioning packets, return an empty string.
     if ( !Helper::strStartsWithStr( packet, ":SR?" )
@@ -49,7 +64,7 @@ QString PacketForge::decryptPacket(const QString& packet)
     return QString( "" );
 }
 
-bool PacketForge::validateSerNum(Player* plr, const QString& packet)
+bool PacketForge::validateSerNum(Player* plr, const QByteArray& packet)
 {
     QString pkt{ this->decryptPacket( packet ) };
 
@@ -59,6 +74,7 @@ bool PacketForge::validateSerNum(Player* plr, const QString& packet)
         return true;
 
     QString srcSerNum = pkt.left( 12 ).mid( 4 );
+
     //Unable to extract a SerNum from the incoming packet,
     //mark as valid.
     if ( srcSerNum.isEmpty() )

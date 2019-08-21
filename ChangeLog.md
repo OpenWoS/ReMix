@@ -2,6 +2,24 @@ TODO:
   * Change the IP re-selection to allow the User to select the active network interface and select the working IP address.
   * Implement other remote administrator commands and sub-commands.
 
+Version 2.4.5:
+    Change:
+      * Moved Server specific information from the main ReMix UI to a ToolTip that is shown when hovering over a Server tab instance.
+      * Added various log messages to further inform the Server Host as to what is happening in the background.
+      * The ChatView will now attempt to use the ingame name of a Player as opposed to just their sernum or alias.
+
+
+    Bugfixes:
+      * The Server Host will now be informed when the PacketForge Module is or is not able to be loaded.
+      * Packets sent to a Server Instance using the game type "Arcadia" will now properly decrypt packets when the PacketForge module is loaded.
+      * ReMix will now properly select the correct MasterMix server to correspond to the GameType selected via the CreateInstance dialog.
+      * ReMix will no longer attempt to continuously check-in with the "Warpath[W97]" MasterMix server.
+        * The "Warpath[W97]" MasterMix does not support responding to the Server Check-In packets.
+          * This is due to the MasterMix version being much older and not really compatible.
+
+
+
+
 Version 2.4.4:
     Change:
       * The threshold for disconnecting a player has been increased to 1024 packets within 1,000MS ( 1 Second ).
