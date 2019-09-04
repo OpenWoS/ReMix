@@ -151,13 +151,14 @@ void PlrListWidget::on_actionSendMessage_triggered()
 
 void PlrListWidget::on_actionMakeAdmin_triggered()
 {
-    bool send{ false };
     if ( menuTarget == nullptr )
         return;
 
-    QString revoke{ "Your Remote Administrator privileges have been REVOKED "
-                    "by either the Server Host. Please contact the Server Host "
+    QString revoke{ "Your Remote Administrator privileges have been revoked "
+                    "by the Server Host. Please contact the Server Host "
                     "if you believe this was in error." };
+    QString reinstated{ "Your Remote Administrator privelages have been "
+                        "partially reinstated by the Server Host." };
 
     QString sernum{ menuTarget->getSernumHex_s() };
     QString prompt{ "" };
@@ -173,7 +174,10 @@ void PlrListWidget::on_actionMakeAdmin_triggered()
         if ( Helper::confirmAction( this, title, prompt ) )
         {
             User::setAdminRank( sernum, GMRanks::GMaster );
-            menuTarget->setNewAdminPwdRequested( true );
+            if ( User::getHasPassword( sernum ) )
+                menuTarget->sendMessage( reinstated, false );
+            else
+                menuTarget->setNewAdminPwdRequested( true );
         }
     }
     else
@@ -185,12 +189,11 @@ void PlrListWidget::on_actionMakeAdmin_triggered()
         if ( Helper::confirmAction( this, title, prompt ) )
         {
             User::setAdminRank( sernum, GMRanks::User );
-            send = true;
+            menuTarget->setAdminPwdReceived( false );
+            menuTarget->setAdminPwdRequested( false );
+            menuTarget->sendMessage( revoke, false );
         }
     }
-
-    if ( send )
-        menuTarget->sendMessage( revoke );
 
     menuTarget = nullptr;
 }
@@ -219,8 +222,8 @@ void PlrListWidget::on_actionMuteNetwork_triggered()
         if ( Helper::confirmAction( this, title, prompt ) )
         {
             QString msg{ "Manual Network %1 of [ %2 ] by Server Owner." };
-                    msg = msg.arg( mute ? "Mute" : "UnMute",
-                                   menuTarget->getSernum_s() );
+                    msg = msg.arg( mute ? "Mute" : "UnMute" )
+                             .arg( menuTarget->getSernum_s() );
             menuTarget->setNetworkMuted( mute, msg );
         }
     }
@@ -248,14 +251,14 @@ void PlrListWidget::on_actionDisconnectUser_triggered()
             reason = reason.arg( Helper::getDisconnectReason( this ) );
             inform = inform.arg( reason );
 
-            menuTarget->sendMessage( inform );
+            menuTarget->sendMessage( inform, false );
             if ( sock->waitForBytesWritten() )
                 menuTarget->setDisconnected( true, DCTypes::IPDC );
 
             QString logMsg{ "%1: [ %2 ], [ %3 ]" };
-            logMsg = logMsg.arg( reason,
-                                 menuTarget->getSernum_s(),
-                                 menuTarget->getBioData() );
+            logMsg = logMsg.arg( reason )
+                           .arg( menuTarget->getSernum_s() )
+                           .arg( menuTarget->getBioData() );
 
             Logger::getInstance()->insertLog( server->getName(), logMsg,
                                               LogTypes::DC, true, true );
@@ -281,20 +284,21 @@ void PlrListWidget::on_actionBANISHUser_triggered()
     {
         if ( Helper::confirmAction( this, title, prompt ) )
         {
-            reason = reason.arg( Helper::getBanishReason( this ) );
+            reason = reason.arg( User::requestBanishReason( this ) );
             inform = inform.arg( reason );
 
-            User::addBan( nullptr, menuTarget, reason );
+            PunishDurations banDuration{ User::requestPunishDuration() };
+            User::addBan( nullptr, menuTarget, reason, false, banDuration );
 
             QString logMsg{ "%1: [ %2 ], [ %3 ]" };
-            logMsg = logMsg.arg( reason,
-                                 menuTarget->getSernum_s(),
-                                 menuTarget->getBioData() );
+            logMsg = logMsg.arg( reason )
+                           .arg( menuTarget->getSernum_s() )
+                           .arg( menuTarget->getBioData() );
 
             Logger::getInstance()->insertLog( server->getName(), logMsg,
                                               LogTypes::BAN, true, true );
 
-            menuTarget->sendMessage( inform );
+            menuTarget->sendMessage( inform, false );
             if ( sock->waitForBytesWritten() )
                 menuTarget->setDisconnected( true, DCTypes::IPDC );
         }

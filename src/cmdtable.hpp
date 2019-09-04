@@ -14,13 +14,13 @@ class CmdTable
     public:
         typedef struct CmdStructure
         {
-            QString command;
-            QString subCommands[ GM_SUBCOMMAND_COUNT ];
-            qint32 subCommandCount;
-            QString commandInfo;
-            QString commandSyntax;
-            GMRanks commandRank;
-            bool commandIsActive;
+            QString cmd;
+            QStringList subCmd;
+            qint32 subCmdCount;
+            QString cmdInfo;
+            QString cmdSyntax;
+            GMRanks cmdRank;
+            bool cmdIsActive;
         }CmdStruct;
 
         static const CmdStruct cmdTable[ GM_COMMAND_COUNT ];
@@ -30,11 +30,14 @@ class CmdTable
 
         static CmdTable* getInstance();
         bool cmdIsActive(const GMCmds& index);
-        bool isSubCommand(const GMCmds& index, const QString& cmd);
+        bool isSubCommand(const GMCmds& index, const QString& cmd,
+                          const bool& time = false);
         bool getCmdHasSubCmd(const GMCmds& index);
 
         QString getCmdName(const GMCmds& index);
         GMCmds getCmdIndex(const QString& cmd);
+        qint32 getSubCmdIndex(const GMCmds& cmdIndex, const QString& subCmd,
+                              const bool& time = false);
         GMRanks getCmdRank(const GMCmds& index);
         QString collateCmdList(const GMRanks& rank);
         QString getCommandInfo(const GMCmds& index, const bool& syntax);

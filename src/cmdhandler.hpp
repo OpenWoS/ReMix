@@ -20,18 +20,19 @@ class CmdHandler : public QObject
                             ServerInfo* svr = nullptr);
         ~CmdHandler();
 
-        bool canUseAdminCommands(Player* plr) const;
+        bool canUseAdminCommands(Player* plr, const GMRanks rank,
+                                 const QString& cmdStr);
         void parseMix5Command(Player* plr, const QString& packet);
         void parseMix6Command(Player* plr, const QString& packet);
         bool parseCommandImpl(Player* plr, QString& packet);
 
         bool canIssueAction(Player* admin, Player* target, const QString& arg1,
                             const GMCmds& argIndex, const bool& all);
-        void cannotIssueAction(Player* admin, Player* target,
+        void cannotIssueAction(Player* admin, const QString& arg1,
                                const GMCmds& argIndex);
 
     private:
-        bool validateAdmin(Player* plr, const GMRanks& rank);
+        bool validateAdmin(Player* plr, GMRanks& rank, const QString& cmdStr);
         GMRanks getAdminRank(Player* plr);
 
         void motdHandler(Player* plr, const QString& subCmd,
@@ -39,8 +40,8 @@ class CmdHandler : public QObject
                          const QString& msg);
 
         void banhandler(Player* plr, const QString& arg1,
-                        const GMCmds& argIndex, const QString& message,
-                        const bool& all);
+                        const QString& duration,
+                        const QString& reason, const bool& all);
 
         void unBanhandler(const QString& subCmd, const QString& arg1);
         void kickHandler(Player* plr, const QString& arg1,
@@ -55,9 +56,9 @@ class CmdHandler : public QObject
         void loginHandler(Player* plr, const QString& subCmd);
         void registerHandler(Player* plr, const QString& subCmd);
 
-        void shutDownHandler(Player* plr, const GMCmds& index,
-                             const QString& subCmd, const QString& arg1,
-                             const QString& msg, const bool& restart = false);
+        void shutDownHandler(Player* plr, const QString& duration,
+                             const QString& reason, bool& stop,
+                             bool& restart);
 
 //        void mkAdminHandler(Player* plr, QString& sernum, QString& arg);
 //        void rmAdminHandler(Player* plr, QString& sernum);
@@ -68,6 +69,10 @@ class CmdHandler : public QObject
 //        void getCommentsHandler(Player* plr, QString& arg);
 //        void chSettingsHandler(Player* plr, QString& setting, QString& value);
         void vanishHandler(Player* plr, const QString& subCmd);
+
+        void parseTimeArgs(const QString& str, QString& timeArg,
+                           QString& reason);
+        qint32 getTimePeriodFromString(const QString& str, QString& timeTxt);
 
     signals:
         void newUserCommentSignal(const QString& sernum, const QString& alias,

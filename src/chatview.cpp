@@ -4,9 +4,12 @@
 #include "ui_chatview.h"
 
 //ReMix includes.
+#include "packethandler.hpp"
 #include "packetforge.hpp"
 #include "serverinfo.hpp"
 #include "settings.hpp"
+#include "server.hpp"
+#include "logger.hpp"
 #include "player.hpp"
 #include "helper.hpp"
 #include "rules.hpp"
@@ -187,6 +190,44 @@ void ChatView::parsePacket(const QByteArray& packet, Player* plr)
                 QString plrName{ varList.at( 0 ) };
                 if ( !plrName.isEmpty() )
                     plr->setPlrName( plrName );
+
+                //Send Camp packets to the newly connecting User.
+                if ( this->getGameID() == Games::WoS )
+                {
+                    PacketHandler* pktHandle{ server->getPktHandle() };
+                    if ( pktHandle != nullptr )
+                    {
+                        Player* tmpPlr{ nullptr };
+                        for ( int i = 0; i < MAX_PLAYERS; ++i )
+                        {
+                            tmpPlr = server->getPlayer( i );
+                            if ( tmpPlr != nullptr
+                              && !tmpPlr->getCampPacket().isEmpty() )
+                            {
+                                if ( plr != tmpPlr )
+                                {
+                                    pktHandle->parseSRPacket(
+                                                tmpPlr->getCampPacket(),
+                                                tmpPlr );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if ( this->getGameID() == Games::WoS )
+            {
+                //Save the User's camp packet. --Send to newly connecting Users.
+                if ( pkt.at( 3 ) == 'F' )
+                {
+                    if ( plr->getCampPacket().isEmpty() )
+                        plr->setCampPacket( packet );
+                }  //User un-camp. Remove camp packet.
+                else if ( pkt.at( 3 ) == 'f' )
+                {
+                    if ( !plr->getCampPacket().isEmpty() )
+                        plr->setCampPacket( "" );
+                }
             }
         }
     }
@@ -280,18 +321,22 @@ void ChatView::parseChatEffect(const QString& packet)
             message = message.mid( 1 );
             this->insertChat( plrName % " gossips: " % message,
                               Colors::Gossip, true );
+            message = plrName % " gossips: " % message;
         }
         else if ( type == '!' )
         {
             message = message.mid( 1 );
             this->insertChat( plrName % " shouts: " % message,
                               Colors::Shout, true );
+
+            message = plrName % " shouts: " % message;
         }
         else if ( type == '/' )
         {
             message = message.mid( 2 );
             this->insertChat( plrName % message,
                               Colors::Emote, true );
+            message = plrName % message;
         }
         else
         {
@@ -299,6 +344,14 @@ void ChatView::parseChatEffect(const QString& packet)
                               Colors::Name, true );
             this->insertChat( message,
                               Colors::Chat, false );
+
+            message = plrName % ": " % message;
+        }
+
+        if ( !message.isEmpty() )
+        {
+            Logger::getInstance()->insertLog( server->getName(), message,
+                                              LogTypes::Chat, true, true );
         }
     }
 }
@@ -378,6 +431,12 @@ void ChatView::on_chatInput_returnPressed()
     }
     else
         message.prepend( "Owner: " );
+
+    if ( !message.isEmpty() )
+    {
+        Logger::getInstance()->insertLog( server->getName(), message,
+                                          LogTypes::Chat, true, true );
+    }
 
     emit this->sendChat( message );
     ui->chatInput->clear();

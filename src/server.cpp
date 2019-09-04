@@ -42,6 +42,7 @@ Server::Server(QWidget* parent, ServerInfo* svr,
     chatView->setGameID( server->getGameId() );
 
     pktHandle = new PacketHandler( server, chatView );
+    server->setPktHandle( pktHandle );
 
     //Connect Objects.
     QObject::connect( pktHandle, &PacketHandler::newUserCommentSignal,
@@ -127,7 +128,10 @@ void Server::updatePlayerTable(Player* plr, const QHostAddress& peerAddr,
         bioHash.insert( peerAddr, QByteArray( "No BIO Data Detected. "
                                               "Be wary of this User!" ) );
         data = bioHash.value( peerAddr );
+        plr->setHasBioData( false );
     }
+    else
+        plr->setHasBioData( true );
 
     plr->setBioData( data );
     if ( plrTableItems.contains( ip ) )
@@ -171,9 +175,9 @@ QStandardItem* Server::updatePlayerTableImpl(const QString& peerIP,
     if ( !bio.isEmpty() )
     {
         QString sernum = Helper::getStrStr( bio, "sernum", "=", "," );
-        plr->validateSerNum( plr->getServerInfo(),
-                             Helper::serNumToHexStr( sernum )
-                                        .toUInt( nullptr, 16 ) );
+        //plr->validateSerNum( plr->getServerInfo(),
+        //                     Helper::serNumToHexStr( sernum )
+        //                                .toUInt( nullptr, 16 ) );
 
         User::updateCallCount( Helper::serNumToHexStr( sernum ) );
 
@@ -199,9 +203,9 @@ QStandardItem* Server::updatePlayerTableImpl(const QString& peerIP,
             plr->setWVar( wVar );
         }
 
-        plrViewModel->setData( plrViewModel->index( row, 1 ),
-                               sernum,
-                               Qt::DisplayRole );
+        //plrViewModel->setData( plrViewModel->index( row, 1 ),
+        //                       sernum,
+        //                       Qt::DisplayRole );
 
         plrViewModel->setData( plrViewModel->index( row, 2 ),
                                age,

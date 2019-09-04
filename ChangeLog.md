@@ -2,6 +2,65 @@ TODO:
   * Change the IP re-selection to allow the User to select the active network interface and select the working IP address.
   * Implement other remote administrator commands and sub-commands.
 
+Version 2.4.8:
+    Change:
+      * ReMix will now store and re-send packets with the OpCode( "F", Camp Initiated ).
+        * This only affects the Well of Souls[WoS].
+
+
+    Bugfixes:
+      * ReMix will now attempt to correct a User's BIO data when they have pinged with a SerNum that does not match their current SerNum.
+        * This is an attempt to correct an oversight left by a BugFix in version [2.4.7].
+
+
+
+
+Version 2.4.7:
+    Change:
+      * Added the ability for ReMote Administrators to set a punishment duration when banning a User.
+        * Example usage: /ban soul 4000 hours 24 *Reason
+
+
+    Bugfixes:
+      * Bans will now properly be removed when a banned User pings the server.
+        * ReMote Administrators may now enact punishments on other Remote Administrators of a lesser rank.
+      * Remove a SerNum check regarding UDP information due to ping/SerNum change collisions within the same household.
+
+
+
+
+Version 2.4.6:
+    Change:
+      * Player Chat is now logged to file.
+      * Player Sernums will now be colored Gold when using a Golden Soul.
+        * Remote Administrators will remain as Green while authenticated and Muted Users will remain as Red.
+      * Added Punishment Durations. Ranging from one day to one year, and permanent.
+        * The durations can currently only be selected when manually Banning a User.
+        * Remote Administrator bans are currently limited to 30 days from the time of banning.
+        * Mutes are currently unaffected and are therefore permanent until reconnecting to the server.
+      * Bans originating from ReMix versions prior to 2.4.6 will automatically be removed.
+        * The Ban information is logged to file so that the Server Host may manually re-ban the User if so desired.
+      * Remote Administrators must now authenticate with the server regardless of any previously set setting.
+        * The Setting is no longer available, and is thus ignored.
+
+
+    Bugfixes:
+      * ReMix Server Instances will now only ping the MasterMix every 30 seconds after the initial check-in.
+        * This is changed to every 5 minutes once a MasterMix response is received.
+      * ReMix Server Instances will now correctly check-in with the "Warpath[W97]" MasterMix every 5 minutes.
+      * ReMix will now correctly shift to a valid Server Instance when closing another.
+        * Previously the Server Instance would retain UI elements pertaining to the closed Server Instance.
+      * Users attempting to use commands outside of their rank status will now properly be warned and once again be given a command attempt countdown.
+      * Unauthenticated Remote Administrators can now properly use all commands available to the rank "GmRanks::User".
+        * Previously a Remote Administrator would be unable to use the command "/login".
+      * Revoking and Reinstating a Remote Administrator from the Player List is now correctly handled.
+        * Previously a Remote Administrator that had been demoted would be requested to re-register a password.
+        * Previously a demoted Remote Administrator could attempt to login with their previous password. (This would not succeeed.)
+      * Banning a User from the Player List will now properly request a Punishment Duration.
+
+
+
+
 Version 2.4.5:
     Change:
       * Moved Server specific information from the main ReMix UI to a ToolTip that is shown when hovering over a Server tab instance.

@@ -20,16 +20,20 @@ class User : public QDialog
     static User* instance;
 
     static const QString keys[ USER_KEY_COUNT ];
+    static const PunishDurations punishDurations[ PUNISH_DURATION_COUNT ];
 
     public:
         enum UserKeys{ kSEEN = 0, kBIO, kIP, kDV, kWV, kRANK, kHASH, kSALT,
-                       kREASON, kBANNED, kPINGS, kCALLS = 11 };
+                       kREASON, kBANNED, kBANDURATION, kPINGS, kCALLS = 12 };
 
         explicit User(QWidget* parent = nullptr);
         ~User();
 
         static User* getInstance();
         static void setInstance(User* value);
+
+        static QString requestBanishReason(QWidget* parent = nullptr);
+        static PunishDurations requestPunishDuration(QWidget* parent = nullptr);
 
         static QSettings* getUserData();
         static void setUserData(const QSettings* value);
@@ -49,7 +53,8 @@ class User : public QDialog
 
         static void removeBan(const QString& value, const qint32& type);
         static bool addBan(const Player* admin, const Player* target,
-                           const QString& reason, const bool remote = false);
+                           const QString& reason, const bool remote,
+                           const PunishDurations duration);
 
         static bool getIsBanned(const QString& value, const BanTypes& type,
                                 const QString& plrSernum = "");
@@ -58,6 +63,8 @@ class User : public QDialog
         static void logBIO(const QString& serNum, const QHostAddress& ip,
                            const QString& dv, const QString& wv,
                            const QString& bio);
+
+        static QByteArray getBIOData(const QString& sernum);
 
     private:
         QModelIndex findModelIndex(const QString& value,

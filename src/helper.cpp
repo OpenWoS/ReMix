@@ -86,11 +86,13 @@ QString Helper::intSToStr(QString& val, int base, int fill, QChar filler)
      */
 
     int val_i = val.toInt();
+    QString str{ "%1" };
     if ( val_i > 0 )
-        return QString( "%1" ).arg( val_i, fill, base, filler ).toUpper();
+        str = str.arg( val_i, fill, base, filler );
     else
-        return QString( "%1" ).arg( val.toInt( nullptr, 16 ),
-                                    fill, base, filler ).toUpper();
+        str = str.arg( val.toInt( nullptr, 16 ), fill, base, filler );
+
+    return str.toUpper();
 }
 
 QString Helper::getStrStr(const QString& str, QString indStr,
@@ -328,20 +330,6 @@ QString Helper::getTextResponse(QWidget* parent, const QString& title,
     return response;
 }
 
-QString Helper::getBanishReason(QWidget* parent)
-{
-    QString label{ "Ban Reason ( Sent to User ):" };
-    QInputDialog* dialog{
-        createInputDialog( parent, label,
-                           QInputDialog::TextInput,
-                           355, 170 ) };
-
-    dialog->exec();
-    dialog->deleteLater();
-
-    return dialog->textValue();
-}
-
 QString Helper::getDisconnectReason(QWidget* parent)
 {
     QString label{ "Disconnect Reason ( Sent to User ):" };
@@ -483,7 +471,7 @@ QHostAddress Helper::getPrivateIP()
           && !strStartsWithStr( tmp, "169" ) )
         {
             //Use first non-local IP address.
-            ipAddress = ipList.at(i).toString();
+            ipAddress = QHostAddress( ipList.at(i) );
             break;
         }
     }
