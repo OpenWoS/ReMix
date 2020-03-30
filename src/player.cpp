@@ -3,6 +3,7 @@
 #include "player.hpp"
 
 //ReMix includes.
+#include "packethandler.hpp"
 #include "serverinfo.hpp"
 #include "settings.hpp"
 #include "sendmsg.hpp"
@@ -15,20 +16,28 @@
 #include <QStandardItemModel>
 #include <QApplication>
 #include <QTcpSocket>
+#include <QDateTime>
 
 Player::Player()
 {
+    //Register the LogTypes type for use within signals and slots.
+    qRegisterMetaType<LogTypes>("LogTypes");
+
+    //Connect LogFile Signals to the Logger Class.
+    QObject::connect( this, &Player::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot, Qt::QueuedConnection );
+
     //Update the User's UI row. --Every 1000MS.
     connTimer.start( 1000 );
-    
+
     //All connections start as ascive and not AFK.
     this->setIsAFK( false );
 
     //Connect to the afkTimer.
-    QObject::connect( &afkTimer, &QTimer::timeout, [this]()
+    QObject::connect( &afkTimer, &QTimer::timeout, &afkTimer,
+    [this]()
     {
         this->setIsAFK( true );
-    });
+    }, Qt::QueuedConnection );
 
     //Start the AFK timer. - 300,000 milliseconds - 5 minutes.
     afkTimer.start( MAX_AFK_TIME );
@@ -43,30 +52,22 @@ Player::Player()
         QString baudOut{ "%1Bd, %2B, %3 Pkts" };
         if ( row != nullptr )
         {
-            this->setModelData( row, row->row(),
-                                static_cast<int>( PlrCols::Time ),
-                                Helper::getTimeFormat( this->getConnTime() ),
-                                Qt::DisplayRole );
+            this->setModelData( row, row->row(), static_cast<int>( PlrCols::Time ),
+                                Helper::getTimeFormat( this->getConnTime() ), Qt::DisplayRole );
 
             this->setAvgBaud( this->getBytesIn(), false );
             baudIn = baudIn.arg( this->getAvgBaud( false ) )
                            .arg( this->getBytesIn() )
                            .arg( this->getPacketsIn() );
 
-            this->setModelData( row, row->row(),
-                                static_cast<int>( PlrCols::BytesIn ),
-                                baudIn,
-                                Qt::DisplayRole );
+            this->setModelData( row, row->row(), static_cast<int>( PlrCols::BytesIn ), baudIn, Qt::DisplayRole );
 
             this->setAvgBaud( this->getBytesOut(), true );
 
             baudOut = baudOut.arg( this->getAvgBaud( true ) )
                              .arg( this->getBytesOut() )
                              .arg( this->getPacketsOut() );
-            this->setModelData( row, row->row(),
-                                static_cast<int>( PlrCols::BytesOut ),
-                                baudOut,
-                                Qt::DisplayRole );
+            this->setModelData( row, row->row(), static_cast<int>( PlrCols::BytesOut ), baudOut, Qt::DisplayRole );
 
             //Color the User's IP address Green if the Admin is authed
             //Otherwise, color as Red.
@@ -85,15 +86,13 @@ Player::Player()
                     color = Colors::GoldenSoul;
             }
 
-            this->setModelData( row, row->row(),
-                                static_cast<int>( PlrCols::SerNum ),
-                                static_cast<int>( color ),
-                                Qt::ForegroundRole, true );
+            this->setModelData( row, row->row(), static_cast<int>( PlrCols::SerNum ),
+                                static_cast<int>( color ), Qt::ForegroundRole, true );
 
             //Color the User's IP address Red if the User's is muted.
             //Otherwise, color as Green.
             color = Colors::Default;
-            if ( !this->getNetworkMuted() )
+            if ( !this->getIsMuted() )
             {
                 if ( !this->getIsVisible() )
                     color = Colors::Invisible;
@@ -103,28 +102,22 @@ Player::Player()
             else
                 color = Colors::Invalid;
 
-            this->setModelData( row, row->row(),
-                                static_cast<int>( PlrCols::IPPort ),
-                                static_cast<int>( color ),
-                                Qt::ForegroundRole, true );
+            this->setModelData( row, row->row(), static_cast<int>( PlrCols::IPPort ),
+                                static_cast<int>( color ), Qt::ForegroundRole, true );
 
             //Set the NPK/AFK icon.
-            this->setModelData( row, row->row(),
-                                static_cast<int>( PlrCols::SerNum ),
-                                this->getAfkIcon(),
-                                Qt::DecorationRole, false );
+            this->setModelData( row, row->row(), static_cast<int>( PlrCols::SerNum ),
+                                this->getAfkIcon(), Qt::DecorationRole, false );
         }
 
         if ( Settings::getDisconnectIdles()
           && idleTime.elapsed() >= MAX_IDLE_TIME )
         {
-            QString reason{ "Auto-Disconnect; Idle timeout: "
-                            "[ %1 ], [ %2 ]" };
+            QString reason{ "Auto-Disconnect; Idle timeout: [ %1 ], [ %2 ]" };
             reason = reason.arg( this->getSernum_s() )
                            .arg( this->getBioData() );
 
-            Logger::getInstance()->insertLog( serverInfo->getName(), reason,
-                                              LogTypes::DC, true, true );
+            emit this->insertLogSignal( serverInfo->getServerName(), reason, LogTypes::PUNISHMENT, true, true );
 
             this->setDisconnected( true, DCTypes::IPDC );
         }
@@ -141,18 +134,14 @@ Player::Player()
                     if ( !this->getNewAdminPwdReceived() )
                         this->setNewAdminPwdRequested( true );
                 }
-                else if (( !Settings::getRequirePassword()
-                        || this->getSvrPwdReceived() )
+                else if ( ( !Settings::getRequirePassword() || this->getSvrPwdReceived() )
                        && !this->getNewAdminPwdRequested() )
                 {
                     if ( !this->getAdminPwdReceived() )
                     {
-                        QString msg{ "The server Admin requires all Remote "
-                                     "Administrators to authenticate themselves "
-                                     "with their password. Please enter your "
-                                     "password with the command (/login *PASS) "
-                                     "or be denied access to the server. "
-                                     "Thank you!" };
+                        QString msg{ "The server Admin requires all Remote Administrators to authenticate themselves "
+                                     "with their password. Please enter your password with the command (/login *PASS) "
+                                     "or be denied access to Remote Administrator privelages. Thank you!" };
 
                         if ( this->getIsAdmin() )
                         {
@@ -163,9 +152,21 @@ Player::Player()
                 }
             }
         }
-    });
+    }, Qt::QueuedConnection );
 
-    QObject::connect( &killTimer, &QTimer::timeout, [this]()
+    //Connect the Player Object to a User UI signal.
+    QObject::connect( User::getInstance(), &User::mutedSerNumDurationSignal, this,
+    [=](const QString& sernum, const quint64& duration)
+    {
+        if ( !sernum.isEmpty() || duration > 0 )
+        {
+            if ( Helper::cmpStrings( sernum, this->getSernumHex_s() ) )
+                this->setIsMuted( duration );
+        }
+    }, Qt::QueuedConnection );
+
+    QObject::connect( &killTimer, &QTimer::timeout, &killTimer,
+    [this]()
     {
         QTcpSocket* soc{ this->getSocket() };
         if ( soc != nullptr )
@@ -177,7 +178,7 @@ Player::Player()
                 soc->close();
             }
         }
-    });
+    }, Qt::QueuedConnection );
     floodTimer.start();
 }
 
@@ -221,9 +222,8 @@ void Player::sendMessage(const QString& msg, const bool& toAll)
         if ( messageDialog == nullptr )
         {
             messageDialog = new SendMsg( this->getSernum_s() );
-            QObject::connect( messageDialog, &SendMsg::forwardMessage,
-                              messageDialog,
-                              [=](QString message)
+            QObject::connect( messageDialog, &SendMsg::forwardMessageSignal, messageDialog,
+            [=](QString message)
             {
                 if ( !message.isEmpty() )
                 {
@@ -236,7 +236,7 @@ void Player::sendMessage(const QString& msg, const bool& toAll)
                             server->sendMasterMessage( message, this, false );
                     }
                 }
-            } );
+            }, Qt::QueuedConnection );
         }
 
         if ( !messageDialog->isVisible() )
@@ -291,27 +291,21 @@ void Player::setIsVisible(const bool& value)
     isVisible = value;
 }
 
-void Player::setModelData(QStandardItem* model, const qint32& row,
-                          const qint32& column, const QVariant& data,
-                          const qint32& role, const bool& isColor)
+void Player::setModelData(QStandardItem* model, const qint32& row, const qint32& column, const QVariant& data, const qint32& role, const bool& isColor)
 {
     if ( model != nullptr )
     {
         QStandardItemModel* sModel = model->model();
         if ( model != nullptr )
         {
-            if ( !isColor )
+            if ( isColor )
             {
                 sModel->setData( model->model()->index( row, column ),
-                                 data, role );
-            }
-            else
-            {
-                sModel->setData( model->model()->index( row, column ),
-                                 Theme::getThemeColor(
-                                     static_cast<Colors>( data.toInt() ) ),
+                                 Theme::getThemeColor( static_cast<Colors>( data.toInt() ) ),
                                  role );
             }
+            else
+                sModel->setData( model->model()->index( row, column ), data, role );
         }
     }
 }
@@ -336,9 +330,7 @@ void Player::setSernum_i(quint32 value)
     if ( value != this->getSernum_i() )
     {
         sernum_i = value;
-        QString sernum_s{ Helper::serNumToIntStr(
-                               Helper::intToStr(
-                                    value, 16, 8 ) ) };
+        QString sernum_s{ Helper::serNumToIntStr( Helper::intToStr( value, 16, 8 ) ) };
         QString sernumHex_s{ Helper::serNumToHexStr( sernum_s ) };
 
         if ( !sernum_s.isEmpty() )
@@ -349,9 +341,7 @@ void Player::setSernum_i(quint32 value)
                 QStandardItemModel* model = row->model();
                 if ( model != nullptr )
                 {
-                    model->setData( model->index( row->row(), 1 ),
-                                    sernum_s,
-                                    Qt::DisplayRole );
+                    model->setData( model->index( row->row(), 1 ), sernum_s, Qt::DisplayRole );
 
                     //Correct the User's BIO Data based on their serNum.
                     //This will only succeed if the User is on file.
@@ -359,14 +349,12 @@ void Player::setSernum_i(quint32 value)
                     QByteArray data{ "" };
 
                     if ( this->getHasBioData()
-                      && !Helper::strContainsStr( this->getBioData(),
-                                                  sernum_s ) )
+                      && !Helper::strContainsStr( this->getBioData(), sernum_s ) )
                     {
                         data = User::getBIOData( sernumHex_s );
                         if ( !sernum_s.isEmpty() )
                         {
-                            if ( Helper::strContainsStr( QString( data ),
-                                                         sernum_s ) )
+                            if ( Helper::strContainsStr( QString( data ), sernum_s ) )
                             {
                                 newBioData = true;
                                 this->setHasBioData( true );
@@ -377,13 +365,8 @@ void Player::setSernum_i(quint32 value)
                         }
                     }
 
-                    if ( newBioData
-                      && !data.isEmpty() )
-                    {
-                        model->setData( model->index( row->row(), 7 ),
-                                        data,
-                                        Qt::DisplayRole );
-                    }
+                    if ( newBioData && !data.isEmpty() )
+                        model->setData( model->index( row->row(), 7 ), data, Qt::DisplayRole );
                 }
             }
         }
@@ -391,6 +374,17 @@ void Player::setSernum_i(quint32 value)
         this->setHasSernum( true );
         this->setSernum_s( sernum_s );
         this->setSernumHex_s( sernumHex_s );
+
+        quint64 muteDuration{ 0 };
+        muteDuration = User::getIsPunished( PunishTypes::Mute, sernumHex_s, PunishTypes::SerNum, sernumHex_s );
+
+        if ( muteDuration <= 0 )
+            muteDuration = User::getIsPunished( PunishTypes::Mute, this->getPublicIP(), PunishTypes::IP, sernumHex_s );
+
+        if ( muteDuration >= 1 )
+            this->setIsMuted( muteDuration );
+
+        serverInfo->sendPlayerSocketInfo();
     }
 }
 
@@ -444,12 +438,12 @@ void Player::setTargetSerNum(quint32 value)
     targetSerNum = value;
 }
 
-int Player::getTargetType() const
+PktTarget Player::getTargetType() const
 {
     return targetType;
 }
 
-void Player::setTargetType(const int& value)
+void Player::setTargetType(const PktTarget& value)
 {
     targetType = value;
 }
@@ -466,6 +460,8 @@ void Player::setPlayTime(const QString& value)
 
 QString Player::getPlrName() const
 {
+    if ( plrName.isEmpty() )
+        return this->getSernum_s();
     return plrName;
 }
 
@@ -484,14 +480,37 @@ void Player::setAlias(const QString& value)
     alias = value;
 }
 
-QString Player::getCampPacket() const
+QByteArray Player::getCampPacket() const
 {
     return campPacket;
 }
 
-void Player::setCampPacket(const QString& value)
+void Player::setCampPacket(const QByteArray& value)
 {
     campPacket = value;
+}
+
+bool Player::getSentCampPacket() const
+{
+    return sentCampPacket;
+}
+
+void Player::setSentCampPacket(bool value)
+{
+    sentCampPacket = value;
+}
+
+void Player::forceSendCampPacket()
+{
+    auto* svr{ this->getServerInfo() };
+    if ( svr != nullptr )
+    {
+        auto* pktHandle{ svr->getPktHandle() };
+        if ( pktHandle != nullptr )
+        {
+            pktHandle->parsePacket( this->getCampPacket(), this );
+        }
+    }
 }
 
 QString Player::getBioData() const
@@ -648,8 +667,8 @@ quint64 Player::getAvgBaud(const bool& out) const
 {
     if ( out )
         return avgBaudOut;
-    else
-        return avgBaudIn;
+
+    return avgBaudIn;
 }
 
 void Player::setAvgBaud(const quint64& bytes, const bool& out)
@@ -727,10 +746,8 @@ void Player::setNewAdminPwdRequested(const bool& value)
     newAdminPwdRequested = value;
     if ( newAdminPwdRequested )
     {
-        QString msg{ "The Server Host is attempting to register you as an "
-                     "Admin with the server. Please reply to this message with "
-                     "(/register *YOURPASS). Note: The server Host and other "
-                     "Admins will not have access to this information." };
+        QString msg{ "The Server Host is attempting to register you as an Admin with the server. Please reply to this message with "
+                     "(/register *YOURPASS). Note: The server Host and other Admins will not have access to this information." };
 
         if ( this->getIsAdmin() )
             this->sendMessage( msg, false );
@@ -764,7 +781,6 @@ void Player::setDisconnected(const bool& value, const DCTypes& dcType)
             switch ( dcType )
             {
                 case DCTypes::IPDC:
-                default:
                     {
                         server->setIpDc( server->getIpDc() + 1 );
                     }
@@ -785,20 +801,32 @@ void Player::setDisconnected(const bool& value, const DCTypes& dcType)
     }
 }
 
-bool Player::getNetworkMuted() const
+quint64 Player::getMuteDuration()
 {
-    return networkMuted;
+    return muteDuration;
 }
 
-void Player::setNetworkMuted(const bool& value, const QString& msg)
+void Player::setMuteDuration(const quint64& value)
 {
-    if ( !msg.isEmpty() )
-    {
-        Logger::getInstance()->insertLog( serverInfo->getName(), msg,
-                                          LogTypes::MUTE, true, true );
-    }
+    muteDuration = value;
+}
 
-    networkMuted = value;
+bool Player::getIsMuted()
+{
+    quint64 date{ QDateTime::currentDateTimeUtc().toTime_t() };
+    if ( muteDuration <= date
+      && muteDuration >= 1 )
+    {
+        User::removePunishment( this->getSernumHex_s(), PunishTypes::Mute, PunishTypes::SerNum );
+        this->setIsMuted( 0 );
+    }
+    return muteDuration >= date;
+}
+
+void Player::setIsMuted(const quint64& duration)
+{
+    isMuted = duration >=1;
+    this->setMuteDuration( duration );
 }
 
 void Player::chatPacketFound()
@@ -872,9 +900,8 @@ void Player::validateSerNum(ServerInfo* server, const quint32& id)
             }
         }
 
-        if ( disconnect == true
-          || ( isBlueCoded == true
-            && Settings::getDCBlueCodedSerNums() ) )
+        if ( disconnect
+          || ( isBlueCoded && Settings::getDCBlueCodedSerNums() ) )
         {
             message = "";
             reason = "";
@@ -884,8 +911,7 @@ void Player::validateSerNum(ServerInfo* server, const quint32& id)
                 reason = "%1: [ %2 ] to [ %3 ], [ %4 ]";
                 reason = reason.arg( message )
                                .arg( this->getSernum_s() )
-                               .arg( Helper::serNumToIntStr(
-                                         Helper::intToStr( id, 16, 8 ) ) )
+                               .arg( Helper::serNumToIntStr( Helper::intToStr( id, 16, 8 ) ) )
                                .arg( this->getBioData() );
             }
             else if ( zeroSerNum )
@@ -893,8 +919,7 @@ void Player::validateSerNum(ServerInfo* server, const quint32& id)
                 message = "Auto-Disconnect; Invalid SerNum";
                 reason = "%1: [ %2 ], [ %3 ]";
                 reason = reason.arg( message )
-                               .arg( Helper::serNumToIntStr(
-                                         Helper::intToStr( id, 16, 8 ) ) )
+                               .arg( Helper::serNumToIntStr( Helper::intToStr( id, 16, 8 ) ) )
                                .arg( this->getBioData() );
             }
             else if ( isBlueCoded )
@@ -902,15 +927,13 @@ void Player::validateSerNum(ServerInfo* server, const quint32& id)
                 message = "Auto-Disconnect; BlueCoded SerNum";
                 reason = "%1: [ %2 ], [ %3 ]";
                 reason = reason.arg( message )
-                               .arg( Helper::serNumToIntStr(
-                                         Helper::intToStr( id, 16, 8 ) ) )
+                               .arg( Helper::serNumToIntStr( Helper::intToStr( id, 16, 8 ) ) )
                                .arg( this->getBioData() );
             }
 
             this->sendMessage( message, false );
 
-            Logger::getInstance()->insertLog( serverInfo->getName(), reason,
-                                              LogTypes::DC, true, true );
+            emit this->insertLogSignal( serverInfo->getServerName(), reason, LogTypes::PUNISHMENT, true, true );
 
             this->setDisconnected( true, DCTypes::IPDC );
         }
@@ -923,13 +946,18 @@ void Player::validateSerNum(ServerInfo* server, const quint32& id)
         if ( !Helper::cmpStrings( masterIP, socketIP ) )
         {
             //Ban IP?
-            reason = "Automatic Network Mute of <[ %1 ][ %2 ]> due to the "
-                     "usage of <[ Soul 1 ][ %3 ]> while connecting from an "
+            message = "Auto-Mute; Attempting to use SerNum 1 with the incorrect IP address. Be warned that this may become a ban within future ReMix versions.";
+            this->sendMessage( message, false );
+
+            reason = "Automatic Network Mute of <[ %1 ][ %2 ]> due to the usage of <[ Soul 1 ][ %3 ]> while connecting from an "
                      "improper IP Address.";
             reason = reason.arg( this->getSernum_s() )
                            .arg( socketIP )
                            .arg( masterIP );
-            this->setNetworkMuted( true, reason );
+
+            User::addMute( nullptr, this, reason, false, true, PunishDurations::THIRTY_MINUTES );
+
+            emit this->insertLogSignal( server->getServerName(), reason, LogTypes::PUNISHMENT, true, true );
         }
     }
 }
@@ -952,4 +980,57 @@ QString Player::getWVar() const
 void Player::setWVar(const QString& value)
 {
     wVar = value;
+}
+
+void Player::sendPacketToPlayerSlot(Player* plr, QTcpSocket* srcSocket, qint32 targetType, quint32 trgSerNum, quint32 trgScene, const QByteArray& packet)
+{
+    //Source Player is this Player Object. Return without further processing.
+    if ( plr == this )
+        return;
+
+    qint64 bOut{ 0 };
+    bool isAuth{ false };
+    bool send{ false };
+
+    QTcpSocket* soc{ this->getSocket() };
+    if ( soc != nullptr && srcSocket != soc )
+    {
+        if ( this->getSvrPwdReceived()
+          || !this->getSvrPwdRequested() )
+        {
+            isAuth = true;
+            send = false;
+
+            switch( static_cast<PktTarget>( targetType ) )
+            {
+                case PktTarget::ALL:
+                {
+                    send = true;
+                }
+                break;
+                case PktTarget::PLAYER:
+                {
+                    if ( trgSerNum == this->getSernum_i() )
+                        send = true;
+                }
+                break;
+                case PktTarget::SCENE:
+                {
+                    if (( trgScene == this->getSernum_i()
+                      || trgScene == this->getSceneHost() ))
+                    {
+                        send = true;
+                    }
+                }
+                break;
+            }
+        }
+
+        if ( send && isAuth )
+        {
+            bOut = soc->write( packet, packet.length() );
+            serverInfo->updateBytesOut( this, bOut );
+        }
+    }
+    return;
 }

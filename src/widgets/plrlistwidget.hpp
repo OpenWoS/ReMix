@@ -26,9 +26,8 @@ class PlrListWidget : public QWidget
     ServerInfo* server{ nullptr };
 
     public:
-        explicit PlrListWidget(QWidget* parent = nullptr,
-                               ServerInfo* svr = nullptr);
-        ~PlrListWidget();
+        explicit PlrListWidget(QWidget* parent = nullptr, ServerInfo* svr = nullptr);
+        ~PlrListWidget() override;
 
         QStandardItemModel* getPlrModel() const;
         void resizeColumns();
@@ -44,6 +43,9 @@ class PlrListWidget : public QWidget
         void on_actionMuteNetwork_triggered();
         void on_actionDisconnectUser_triggered();
         void on_actionBANISHUser_triggered();
+
+    signals:
+        void insertLogSignal(const QString& source, const QString& message, const LogTypes& type, const bool& logToFile, const bool& newLine) const;
 
     private:
         Ui::PlrListWidget* ui;

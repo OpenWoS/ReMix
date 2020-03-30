@@ -1,6 +1,6 @@
 
 //Class includes.
-#include "views/Loggersortproxymodel.hpp"
+#include "views/loggersortproxymodel.hpp"
 
 //ReMix includes.
 #include "helper.hpp"
@@ -11,15 +11,8 @@
 #include <QDateTime>
 #include <QVariant>
 
-LoggerSortProxyModel::LoggerSortProxyModel()
-{
-
-}
-
-LoggerSortProxyModel::~LoggerSortProxyModel()
-{
-
-}
+LoggerSortProxyModel::LoggerSortProxyModel()= default;
+LoggerSortProxyModel::~LoggerSortProxyModel() = default;
 
 bool LoggerSortProxyModel::lessThan(const QModelIndex& left, const QModelIndex& right) const
 {
@@ -42,15 +35,11 @@ bool LoggerSortProxyModel::lessThan(const QModelIndex& left, const QModelIndex& 
           || column == static_cast<int>( UserCols::BanDate )
           || column == static_cast<int>( UserCols::BanDuration ) )
         {
-            vlStr = QString::number(
-                        QDateTime::fromString( vlStr,
-                                               "ddd MMM dd HH:mm:ss yyyy" )
-                             .toTime_t() );
+            vlStr = QString::number( QDateTime::fromString( vlStr, "ddd MMM dd HH:mm:ss yyyy" )
+                                          .toTime_t() );
 
-            vrStr = QString::number(
-                        QDateTime::fromString( vrStr,
-                                               "ddd MMM dd HH:mm:ss yyyy" )
-                             .toTime_t() );
+            vrStr = QString::number( QDateTime::fromString( vrStr, "ddd MMM dd HH:mm:ss yyyy" )
+                                          .toTime_t() );
         }
         else if ( column == static_cast<int>( UserCols::SerNum ) )
         {

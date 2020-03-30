@@ -15,9 +15,10 @@ class UPNP : public QObject
     Q_OBJECT
 
     public:
-        static QString schemas[ UPNP_SCHEMA_COUNT ];
+        static QStringList schemas;
         static QHostAddress externalAddress;
         static QVector<qint32> ports;
+        static QMap<qint32, bool> permFwd;
         static bool tunneled;
         static UPNP* upnp;
 
@@ -36,14 +37,13 @@ class UPNP : public QObject
 
     public:
         explicit UPNP(QObject* parent = nullptr);
-        ~UPNP();
+        ~UPNP() override;
 
     public:
         void makeTunnel();
 
         void checkPortForward(const QString& protocol, const qint32& port);
-        void addPortForward(const QString& protocol, const qint32& port,
-                            const bool& lifetime = false);
+        void addPortForward(const QString& protocol, const qint32& port, const bool& lifetime = false);
         void removePortForward(const QString& protocol, const qint32& port);
 
         static UPNP* getInstance();
@@ -55,13 +55,11 @@ class UPNP : public QObject
     private:
         void getExternalIP();
         void extractExternalIP(const QString& action, const QString& message);
-        void postSOAP(const QString& action, const QString& message,
-                      const QString& protocol, const qint32& port = 0);
-        void extractError(const QString& message, const qint32& port,
-                          const QString& protocol);
+        void postSOAP(const QString& action, const QString& message, const QString& protocol, const qint32& port = 0);
+        void extractError(const QString& message, const qint32& port, const QString& protocol);
 
     private slots:
-        void getUdp();
+        void getUdpSlot();
 
     signals:
         void removedPortForward(const qint32 port, const QString& protocol);
@@ -71,6 +69,8 @@ class UPNP : public QObject
         void udpResponse();
         void error(const QString& message);
         void createdTunnel();
+
+        void insertLogSignal(const QString& source, const QString& message, const LogTypes& type, const bool& logToFile, const bool& newLine);
 };
 
 #endif // UPNP_HPP

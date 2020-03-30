@@ -3,6 +3,7 @@
 
 //ReMix includes.
 #include "views/loggersortproxymodel.hpp"
+#include "thread/writethread.hpp"
 #include "settings.hpp"
 #include "helper.hpp"
 
@@ -22,19 +23,17 @@ LoggerSortProxyModel* Logger::tblProxy{ nullptr };
 QStandardItemModel* Logger::tblModel{ nullptr };
 Logger* Logger::logInstance;
 
-const QString Logger::logType[ LOG_TYPE_COUNT ] =
+const QString Logger::website{ "https://bitbucket.org/ahitb/remix" };
+const QStringList Logger::logType =
 {
     "AdminUsage",
     "Comments",
     "UsageLog",
     "UPNPLog",
-    "BanLog",
-    "DCLog",
-    "MuteLog",
-    "Ignored",
+    "PunishmentLog",
     "Misc",
-    "PacketForge",
     "ChatLog",
+    "QuestLog",
 };
 
 Logger::Logger(QWidget *parent) :
@@ -43,16 +42,23 @@ Logger::Logger(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    tblModel = new QStandardItemModel( 0, 4, nullptr );
-    tblModel->setHeaderData( static_cast<int>( LogCols::Date ),
-                             Qt::Horizontal, "Date" );
-    tblModel->setHeaderData( static_cast<int>( LogCols::Source ),
-                             Qt::Horizontal, "Source" );
-    tblModel->setHeaderData( static_cast<int>( LogCols::Type ),
-                             Qt::Horizontal, "Type" );
-    tblModel->setHeaderData( static_cast<int>( LogCols::Message ),
-                             Qt::Horizontal, "Message" );
+    QThread* thread{ new QThread() };
+    writeThread = WriteThread::getNewWriteThread( logType, nullptr );
+    writeThread->moveToThread( thread );
 
+    //Register the LogTypes type for use within signals and slots.
+    qRegisterMetaType<LogTypes>("LogTypes");
+
+    //Connect the Logger Class to the WriteThread Class.
+    QObject::connect( this, &Logger::insertLogSignal, writeThread, &WriteThread::insertLogSlot, Qt::QueuedConnection );
+
+    tblModel = new QStandardItemModel( 0, 4, nullptr );
+    tblModel->setHeaderData( static_cast<int>( LogCols::Date ), Qt::Horizontal, "Date" );
+    tblModel->setHeaderData( static_cast<int>( LogCols::Source ), Qt::Horizontal, "Source" );
+    tblModel->setHeaderData( static_cast<int>( LogCols::Type ), Qt::Horizontal, "Type" );
+    tblModel->setHeaderData( static_cast<int>( LogCols::Message ), Qt::Horizontal, "Message" );
+
+    QObject::connect( this, &Logger::resizeColumnsSignal, this, &Logger::resizeColumnsSlot, Qt::QueuedConnection );
     ui->logView->setModel( tblModel );
 
     //Proxy model to support sorting without actually
@@ -63,17 +69,16 @@ Logger::Logger(QWidget *parent) :
     tblProxy->setSortCaseSensitivity( Qt::CaseInsensitive );
     ui->logView->setModel( tblProxy );
 
-    ui->logView->verticalHeader()->setSectionResizeMode( QHeaderView::Fixed );
-    ui->logView->verticalHeader()->setDefaultSectionSize( 15 );
+    //ui->logView->verticalHeader()->setSectionResizeMode( QHeaderView::Fixed );
+    //ui->logView->verticalHeader()->setDefaultSectionSize( 15 );
     ui->logView->verticalHeader()->setVisible( false );
+    ui->logView->horizontalHeader()->setVisible( true );
 
     ui->logView->horizontalHeader()->setStretchLastSection( true );
 
     //Load the application Icon into the top left of the dialog.
     iconViewerScene = new QGraphicsScene();
-    iconViewerItem = new QGraphicsPixmapItem(
-                         QPixmap::fromImage(
-                             QImage( ":/icon/ReMix.png" ) ) );
+    iconViewerItem = new QGraphicsPixmapItem( QPixmap::fromImage( QImage( ":/icon/ReMix.png" ) ) );
     iconViewerScene->addItem( iconViewerItem );
 
     ui->iconViewer->setScene( iconViewerScene );
@@ -89,29 +94,31 @@ Logger::Logger(QWidget *parent) :
 
     if ( Settings::getSaveWindowPositions() )
     {
-        QByteArray geometry{ Settings::getWindowPositions(
-                             this->metaObject()->className() ) };
+        QByteArray geometry{ Settings::getWindowPositions( this->metaObject()->className() ) };
         if ( !geometry.isEmpty() )
-        {
-            this->restoreGeometry( Settings::getWindowPositions(
-                                       this->metaObject()->className() ) );
-        }
+            this->restoreGeometry( Settings::getWindowPositions( this->metaObject()->className() ) );
     }
+    thread->start();
 }
 
 Logger::~Logger()
 {
+    //Disable Logging Signals.
+    this->disconnect();
+
+    QThread* thread = writeThread->thread();
+    if ( thread != nullptr )
+        thread->exit();
+
     if ( Settings::getSaveWindowPositions() )
-    {
-        Settings::setWindowPositions( this->saveGeometry(),
-                                      this->metaObject()->className() );
-    }
+        Settings::setWindowPositions( this->saveGeometry(), this->metaObject()->className() );
 
     iconViewerScene->removeItem( iconViewerItem );
     iconViewerScene->deleteLater();
 
     tblProxy->deleteLater();
     tblModel->deleteLater();
+    this->deleteLater();
 
     delete iconViewerItem;
     delete ui;
@@ -138,62 +145,44 @@ void Logger::scrollToBottom()
 
         //Detect when the user is scrolling upwards.
         //And prevent scrolling.
-        if ( obj->verticalScrollBar()->sliderPosition()
-          == obj->verticalScrollBar()->maximum() )
-        {
+        if ( obj->verticalScrollBar()->sliderPosition() == obj->verticalScrollBar()->maximum() )
             obj->scrollToBottom();
-        }
     }
 }
 
-void Logger::insertLog(const QString& source, const QString& message,
-                       const LogTypes& type, const bool& logToFile,
-                       const bool& newLine)
+void Logger::insertLog(const QString& source, const QString& message, const LogTypes& type, const bool& logToFile, const bool& newLine)
 {
     QAbstractItemModel* tblModel = ui->logView->model();
     QString time = Helper::getTimeAsString();
 
-    if ( tblModel != nullptr )
+    if ( tblModel != nullptr
+      && ( type != LogTypes::CHAT ) ) //Prevent Chat from appearing
+                                      //within the Logger UI.
     {
         qint32 row = tblModel->rowCount();
         tblModel->insertRow( row );
         ui->logView->setRowHeight( row, 20 );
 
-        this->updateRowData( row,
-                             static_cast<int>( LogCols::Date ),
-                             time );
-        ui->logView->resizeColumnToContents(
-                    static_cast<int>( LogCols::Date ) );
+        this->updateRowData( row, static_cast<int>( LogCols::Date ), time );
+        emit this->resizeColumnsSlot( LogCols::Date );
 
-        this->updateRowData( row,
-                             static_cast<int>( LogCols::Source ),
-                             source );
-        ui->logView->resizeColumnToContents(
-                    static_cast<int>( LogCols::Source ) );
+        this->updateRowData( row, static_cast<int>( LogCols::Source ), source );
+        emit this->resizeColumnsSlot( LogCols::Source );
 
-        this->updateRowData( row,
-                             static_cast<int>( LogCols::Type ),
-                             logType[ static_cast<int>( type ) ] );
-        ui->logView->resizeColumnToContents(
-                    static_cast<int>( LogCols::Type ) );
+        this->updateRowData( row, static_cast<int>( LogCols::Type ), logType.at( static_cast<int>( type ) ) );
+        emit this->resizeColumnsSlot( LogCols::Type );
 
-        this->updateRowData( row,
-                             static_cast<int>( LogCols::Message ),
-                             message.simplified() );
-
-        //ui->logView->resizeRowsToContents();
+        this->updateRowData( row, static_cast<int>( LogCols::Message ), message.simplified() );
+        emit this->resizeColumnsSlot( LogCols::Message );
 
         this->scrollToBottom();
     }
 
     if ( logToFile && Settings::getLogFiles() )
-    {
-        this->logToFile( type, message, time, newLine );
-    }
+        emit this->insertLogSignal( type, message, time, newLine );
 }
 
-void Logger::updateRowData(const qint32& row, const qint32& col,
-                           const QVariant& data)
+void Logger::updateRowData(const qint32& row, const qint32& col, const QVariant& data)
 {
     QModelIndex index = tblModel->index( row, col );
     if ( index.isValid() )
@@ -205,55 +194,23 @@ void Logger::updateRowData(const qint32& row, const qint32& col,
 
             tblModel->setData( index, msg, Qt::DisplayRole );
             if ( col == static_cast<int>( LogCols::Date ) )
-                ui->logView->resizeColumnToContents( static_cast<int>(
-                                                         LogCols::Date ) );
+                emit this->resizeColumnsSlot( LogCols::Date );
         }
         else
-        {
             tblModel->setData( index, data, Qt::DisplayRole );
-        }
     }
 }
 
-void Logger::logToFile(const LogTypes& type, const QString& text,
-                       const QString& timeStamp,
-                       const bool& newLine)
+//Slots
+void Logger::insertLogSlot(const QString& source, const QString& message, const LogTypes& type, const bool& logToFile, const bool& newLine)
 {
-    if ( Settings::getLogFiles() )
-    {
-        QString logTxt = text;
-
-        QFile log( "logs/"
-                 % logType[ static_cast<int>( type ) ]
-                 % QDate::currentDate().toString( "/[yyyy-MM-dd]/" )
-                 % logType[ static_cast<int>( type ) ]
-                 % ".txt" );
-
-        QFileInfo logInfo( log );
-        if ( !logInfo.dir().exists() )
-            logInfo.dir().mkpath( "." );
-
-        if ( log.open( QFile::WriteOnly | QFile::Append ) )
-        {
-            logTxt.prepend( "[ " % timeStamp % " ] " );
-
-            if ( newLine )
-                logTxt.prepend( "\r\n" );
-
-            log.write( logTxt.toLatin1() );
-
-            log.close();
-        }
-    }
+    this->insertLog( source, message, type, logToFile, newLine );
 }
 
 void Logger::on_websiteLabel_linkActivated(const QString&)
 {
-    QString website{ "https://bitbucket.org/ahitb/remix" };
-
     QString title{ "Open Link?" };
-    QString prompt{ "Do you wish to open the website [ %1 ] "
-                    "in a browser window?" };
+    QString prompt{ "Do you wish to open the website [ %1 ] in a browser window?" };
     prompt = prompt.arg( website );
 
     if ( Helper::confirmAction( this, title, prompt ) )
@@ -261,8 +218,7 @@ void Logger::on_websiteLabel_linkActivated(const QString&)
         QUrl websiteLink( website );
         QDesktopServices::openUrl( websiteLink );
 
-        QString message{ "Opening a local Web Browser to the website [ %1 ] "
-                         "per user request." };
+        QString message{ "Opening a local Web Browser to the website [ %1 ] per user request." };
         message = message.arg( website );
 
         this->insertLog( "Logger", message, LogTypes::MISC, false, false );
@@ -272,4 +228,12 @@ void Logger::on_websiteLabel_linkActivated(const QString&)
 void Logger::on_autoScroll_clicked()
 {
     Settings::setLoggerAutoScroll( ui->autoScroll->isChecked() );
+}
+
+void Logger::resizeColumnsSlot(const LogCols& column)
+{
+    if ( ui == nullptr )
+        return;
+
+    ui->logView->resizeColumnToContents( static_cast<int>( column ) );
 }

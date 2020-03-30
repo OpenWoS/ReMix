@@ -18,25 +18,27 @@ class ChatView : public QDialog
     Q_OBJECT
 
     Games gameID{ Games::Invalid };
-    static QString bleepList[ 439 ];
+    static QStringList bleepList;
 
     PacketForge* pktForge{ nullptr };
     ServerInfo* server{ nullptr };
+    CmdHandler* cmdHandle{ nullptr };
 
     public:
         explicit ChatView(QWidget* parent = nullptr, ServerInfo* svr = nullptr);
-        ~ChatView();
+        ~ChatView() override;
 
         void setTitle(const QString& name);
         void setGameID(const Games& gID);
         Games getGameID() const;
 
-        void parsePacket(const QByteArray& packet, Player* plr = nullptr);
-        void parseChatEffect(const QString& packet);
-        void insertChat(const QString& msg, const Colors& color,
-                        const bool& newLine);
-
+        bool parsePacket(const QByteArray& packet, Player* plr = nullptr);
+        bool parseChatEffect(const QString& packet);
         void bleepChat(QString& message);
+        void insertChat(const QString& msg, const Colors& color, const bool& newLine);
+
+        CmdHandler* getCmdHandle() const;
+        void setCmdHandle(CmdHandler* value);
 
     private slots:
         void on_chatInput_returnPressed();
@@ -45,7 +47,8 @@ class ChatView : public QDialog
         Ui::ChatView* ui;
 
     signals:
-        void sendChat(const QString&);
+        void insertLogSignal(const QString& source, const QString& message, const LogTypes& type, const bool& logToFile, const bool& newLine) const;
+        void sendChatSignal(const QString&);
 };
 
 #endif // CHATVIEW_HPP

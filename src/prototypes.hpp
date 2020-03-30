@@ -94,6 +94,10 @@
     class RulesWidget;
     class MOTDWidget;
 
+    //Threaded Classes.
+    class WriteThread;
+    class UdpThread;
+
     //GUI and Data Storage Classes.
     class CreateInstance;
     class AppEventFilter;
@@ -269,7 +273,7 @@
         //Valid Command Structure Format.
         enum class CmdTblFmt: int { Cmd = 0, SubCommands, SubCommandCount,
                                     CmdInfo, CmdSyntax, CmdRank,
-                                    CmdIsActive = 4 };
+                                    CmdIsActive = 6 };
 
         //Valid SerNum response codes.
         enum UserListResponse{ Q_Response = 0, R_Response = 1 };
@@ -277,8 +281,9 @@
         //Valid Game ID's that ReMix can call to.
         enum class Games: int{ WoS = 0, ToY = 1, W97 = 2, Invalid = -1 };
 
-        //Valid methods ov banning Users.
-        enum class BanTypes: int{ SerNum = 0, IP, DV, WV = 3 };
+        //Valid methods of banning Users.
+        //Valid punishment types.
+        enum class PunishTypes: int{ Mute = 0, Ban, SerNum, IP, DV, WV = 5 };
 
         //Valid forms of diconnecting Users.
         enum class DCTypes: int{ IPDC = 0, DupDC, PktDC = 2 };
@@ -297,16 +302,16 @@
 
         //Valid columns within the User Dialog.
         enum class UserCols: int{ SerNum = 0, Pings, Calls, LastSeen, IPAddr,
-                                  Rank, Banned, BanDate, BanDuration,
-                                  BanReason = 9, ColCount = 10 };
+                                  Rank, Muted, MuteDate, MuteDuration,
+                                  MuteReason, Banned, BanDate, BanDuration,
+                                  BanReason = 13, ColCount = 14 };
 
         //Valid columns within the Logger Dialog.
         enum class LogCols: int{ Date = 0, Source, Type, Message = 3,
                                  ColCount = 4 };
 
         //Valid Log types available to the Logger Class.
-        enum class LogTypes: int{ ADMIN = 0, COMMENT, USAGE, UPNP, BAN, DC,
-                                  MUTE, IGNORE, MISC, PktForge, Chat = 10 };
+        enum class LogTypes: int{ ADMIN = 0, COMMENT, USAGE, UPNP, PUNISHMENT, MISC, CHAT, QUEST = 7, MAX = 7 };
 
         //Used for converting time in seconds to a human readable format.
         enum class TimeFormat{ Hours = 0, Minutes, Seconds, Default = -1,
@@ -315,12 +320,20 @@
         //Valid Ban Durations in seconds.
         //1_Day, 7 Days, 30 Days, 6 Months, 1 Year, Permanent
         enum class PunishDurations: int{ Invalid = 0,
-                                         One_Day = 86400,
+                                         THIRTY_SECONDS = 30,
+                                         ONE_MINUTE = 60,
+                                         TEN_MINUTES = 600,
+                                         THIRTY_MINUTES = 1800,
+                                         ONE_HOUR = 3600,
+                                         ONE_DAY = 86400,
                                          SEVEN_DAYS = 604800,
                                          THIRTY_DAYS = 2592000,
                                          SIX_MONTHS = 15552000,
                                          ONE_YEAR = 31104000,
                                          PERMANENT = 2147483647 };
+
+        //Valid target specifiers for packets. Used by the MIX packet type.
+        enum class PktTarget: int{ ALL = 0, PLAYER, SCENE = 2 };
 
     #endif  // REMIX_GLOBALS
 

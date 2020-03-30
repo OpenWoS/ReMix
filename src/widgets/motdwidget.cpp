@@ -30,7 +30,7 @@ MOTDWidget::MOTDWidget(const QString& name) :
         Helper::stripNewlines( strVar );
 
         Settings::setMOTDMessage( strVar, serverName );
-    });
+    }, Qt::QueuedConnection );
 }
 
 MOTDWidget::~MOTDWidget()
@@ -43,7 +43,7 @@ MOTDWidget* MOTDWidget::getWidget(ServerInfo* server)
     MOTDWidget* widget{ motdWidgets.value( server ) };
     if ( widget == nullptr )
     {
-        widget = new MOTDWidget( server->getName() );
+        widget = new MOTDWidget( server->getServerName() );
         motdWidgets.insert( server, widget );
     }
     return widget;

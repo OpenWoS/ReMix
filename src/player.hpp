@@ -16,6 +16,7 @@ class Player : public QObject
 
     QStandardItem* tableRow{ nullptr };
     ServerInfo* serverInfo{ nullptr };
+    User* userUIObject{ nullptr };
     SendMsg* messageDialog{ nullptr };
     QTcpSocket* socket{ nullptr };
     QByteArray outBuff;
@@ -29,7 +30,7 @@ class Player : public QObject
     QString dVar{ "" };
     QString wVar{ "" };
 
-    QString campPacket{ "" };
+    QByteArray campPacket{ "" };
     bool sentCampPacket{ false };
 
     QString bioData{ "" };
@@ -44,7 +45,7 @@ class Player : public QObject
 
     quint32 targetHost{ 0 };
     quint32 targetSerNum{ 0 };
-    int targetType{ 0 };
+    PktTarget targetType{ PktTarget::ALL };
 
     bool svrPwdRequested{ false };
     bool svrPwdReceived{ false };
@@ -75,10 +76,12 @@ class Player : public QObject
     QElapsedTimer idleTime;
 
     QTimer killTimer;
-    bool isDisconnected{ false };
 
+    bool isDisconnected{ false };
     bool isVisible{ true };
-    bool networkMuted{ false };
+    bool isMuted{ false };
+
+    quint64 muteDuration{ 0 };
 
     QTimer afkTimer;
     QIcon afkIcon;
@@ -86,11 +89,9 @@ class Player : public QObject
 
     public:
         explicit Player();
-        ~Player();
+        ~Player() override;
 
         void sendMessage(const QString& msg = "", const bool& toAll = false);
-
-        enum Target{ ALL = 0, PLAYER, SCENE = 2 };
 
         quint64 getConnTime() const;
         void startConnTimer();
@@ -119,8 +120,8 @@ class Player : public QObject
         quint32 getTargetSerNum() const;
         void setTargetSerNum(quint32 value);
 
-        int getTargetType() const;
-        void setTargetType(const int& value);
+        PktTarget getTargetType() const;
+        void setTargetType(const PktTarget& value);
 
         QString getPlayTime() const;
         void setPlayTime(const QString& value);
@@ -199,11 +200,12 @@ class Player : public QObject
         //Note: A User will be disconnected on their next update.
         //Usually every 250 MS or as defined by MAX_DISCONNECT_TTL.
         bool getIsDisconnected() const;
-        void setDisconnected(const bool& value,
-                             const DCTypes& dcType = DCTypes::IPDC);
+        void setDisconnected(const bool& value, const DCTypes& dcType = DCTypes::IPDC);
 
-        bool getNetworkMuted() const;
-        void setNetworkMuted(const bool& value, const QString& msg);
+        quint64 getMuteDuration();
+        void setMuteDuration(const quint64& value);
+        bool getIsMuted();
+        void setIsMuted(const quint64& duration);
 
         void chatPacketFound();
 
@@ -230,13 +232,22 @@ class Player : public QObject
         bool getHasSernum() const;
         void setHasSernum(bool value);
 
-        QString getCampPacket() const;
-        void setCampPacket(const QString& value);
+        QByteArray getCampPacket() const;
+        void setCampPacket(const QByteArray& value);
+
+        bool getSentCampPacket() const;
+        void setSentCampPacket(bool value);
+
+        void forceSendCampPacket();
 
     private:
-        void setModelData(QStandardItem* model, const qint32& row,
-                          const qint32& column, const QVariant& data,
-                          const qint32& role, const bool& isColor = false);
+        void setModelData(QStandardItem* model, const qint32& row, const qint32& column, const QVariant& data, const qint32& role, const bool& isColor = false);
+
+    public slots:
+        void sendPacketToPlayerSlot(Player* plr, QTcpSocket* srcSocket, qint32 targetType, quint32 trgSerNum, quint32 trgScene, const QByteArray& packet);
+
+    signals:
+        void insertLogSignal(const QString& source, const QString& message, const LogTypes& type, const bool& logToFile, const bool& newLine) const;
 };
 
 #endif // PLAYER_HPP

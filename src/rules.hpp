@@ -5,6 +5,7 @@
 
 //Required Qt includes.
 #include <QObject>
+#include <QMutex>
 
 class Rules
 {
@@ -14,11 +15,11 @@ class Rules
                       noEavesdrop = 9, noMigrate = 10, noMod = 11, noPets = 12,
                       noPK = 13, arenaPK = 14 };
 
-        static const QString subKeys[ RULES_SUBKEY_COUNT ];
+        static const QStringList subKeys;
 
-        static void setRule(const QString& key, const QVariant& value,
-                            const QString& svrID);
+        static void setRule(const QString& key, const QVariant& value, const QString& svrID);
         static QVariant getRule(const QString& key, const QString& svrID);
+
         static void removeRule(const QString& key, const QString& svrID);
 
         static QString getRuleSet(const QString& svrID);
@@ -73,6 +74,9 @@ class Rules
 
         static void setArenaPKing(const bool& value, const QString& svrID);
         static bool getArenaPKing(const QString& svrID);
+
+    private:
+        static QMutex mutex;
 };
 
 #endif // RULES_HPP

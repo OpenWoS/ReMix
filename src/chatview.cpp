@@ -7,6 +7,7 @@
 #include "packethandler.hpp"
 #include "packetforge.hpp"
 #include "serverinfo.hpp"
+#include "cmdhandler.hpp"
 #include "settings.hpp"
 #include "server.hpp"
 #include "logger.hpp"
@@ -18,12 +19,12 @@
 #include <QScrollBar>
 #include <QtCore>
 
-QString ChatView::bleepList[ 439 ]
+QStringList ChatView::bleepList
 {
     "4r5e", "5h1t", "5hit", "a55", "anal", "anus", "ar5e", "arrse", "arse",
     "ass", "ass-fucker", "asses", "assfucker", "assfukka", "asshole",
     "assholes", "asswhole", "a_s_s", "b!tch", "b00bs", "b17ch", "b1tch",
-    "ballbag" "ballsack", "bastard", "beastial", "beastiality", "bestial",
+    "ballbag", "ballsack", "bastard", "beastial", "beastiality", "bestial",
     "bestiality", "bi+ch", "biatch", "bitch", "bitcher", "bitchers", "bitches",
     "bitchin", "bitching", "blow job", "blowjob", "blowjobs", "boiolas",
     "bollock", "bollok", "boner", "boob", "boobs", "booobs", "boooobs",
@@ -98,27 +99,26 @@ ChatView::ChatView(QWidget* parent, ServerInfo* svr) :
     ui->setupUi(this);
     server = svr;
 
-    pktForge = PacketForge::getInstance();
+    //Register the LogTypes type for use within signals and slots.
+    qRegisterMetaType<LogTypes>("LogTypes");
 
+    //Connect LogFile Signals to the Logger Class.
+    QObject::connect( this, &ChatView::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot, Qt::QueuedConnection );
+
+    pktForge = PacketForge::getInstance();
     if ( Settings::getSaveWindowPositions() )
     {
-        QByteArray geometry{ Settings::getWindowPositions(
-                                    this->metaObject()->className() ) };
+        QByteArray geometry{ Settings::getWindowPositions( this->metaObject()->className() ) };
         if ( !geometry.isEmpty() )
-        {
-            this->restoreGeometry( Settings::getWindowPositions(
-                                       this->metaObject()->className() ) );
-        }
+            this->restoreGeometry( Settings::getWindowPositions( this->metaObject()->className() ) );
     }
 }
 
 ChatView::~ChatView()
 {
     if ( Settings::getSaveWindowPositions() )
-    {
-        Settings::setWindowPositions( this->saveGeometry(),
-                                      this->metaObject()->className() );
-    }
+        Settings::setWindowPositions( this->saveGeometry(), this->metaObject()->className() );
+
     delete ui;
 }
 
@@ -144,16 +144,17 @@ Games ChatView::getGameID() const
     return gameID;
 }
 
-void ChatView::parsePacket(const QByteArray& packet, Player* plr)
+bool ChatView::parsePacket(const QByteArray& packet, Player* plr)
 {
     //We were unable to load our PacketForge library, return.
     if ( pktForge == nullptr )
-        return;
+        return false;
 
     //The Player object is invalid, return.
     if ( plr == nullptr )
-        return;
+        return false;
 
+    bool retn{ true };
     QString pkt{ packet };
     if ( this->getGameID() != Games::W97 )
     {
@@ -174,12 +175,11 @@ void ChatView::parsePacket(const QByteArray& packet, Player* plr)
 
             if ( pkt.at( 3 ) == 'C' )
             {
-                this->parseChatEffect( pkt );
                 plr->chatPacketFound();
+                retn = this->parseChatEffect( pkt );
             }
             else if ( pkt.at( 3 ) == '3'
-                   || ( ( this->getGameID() == Games::ToY )
-                     && ( pkt.at( 3 ) == 'N' ) ) )
+                   || ( ( this->getGameID() == Games::ToY ) && ( pkt.at( 3 ) == 'N' ) ) )
             {
                 QStringList varList;
                 if ( this->getGameID() == Games::ToY )
@@ -191,24 +191,30 @@ void ChatView::parsePacket(const QByteArray& packet, Player* plr)
                 if ( !plrName.isEmpty() )
                     plr->setPlrName( plrName );
 
-                //Send Camp packets to the newly connecting User.
-                if ( this->getGameID() == Games::WoS )
+                //Check that the User is actually incarnating.
+                int type{ pkt.at( 14 ).toLatin1() - 0x41 };
+                if ( type >= 1 && type != 4 )
                 {
-                    PacketHandler* pktHandle{ server->getPktHandle() };
-                    if ( pktHandle != nullptr )
+                    //Send Camp packets to the newly connecting User.
+                    if ( this->getGameID() == Games::WoS )
                     {
                         Player* tmpPlr{ nullptr };
                         for ( int i = 0; i < MAX_PLAYERS; ++i )
                         {
                             tmpPlr = server->getPlayer( i );
                             if ( tmpPlr != nullptr
-                              && !tmpPlr->getCampPacket().isEmpty() )
+                              && plr != tmpPlr )
                             {
-                                if ( plr != tmpPlr )
+                                if ( plr->getSceneHost() != tmpPlr->getSernum_i()
+                                  || plr->getSceneHost() <= 0 )
                                 {
-                                    pktHandle->parseSRPacket(
-                                                tmpPlr->getCampPacket(),
-                                                tmpPlr );
+                                    if ( !tmpPlr->getCampPacket().isEmpty()
+                                      && tmpPlr->getTargetType() == PktTarget::ALL )
+                                    {
+                                        tmpPlr->setTargetSerNum( plr->getSernum_i() );
+                                        tmpPlr->setTargetType( PktTarget::PLAYER );
+                                        tmpPlr->forceSendCampPacket();
+                                    }
                                 }
                             }
                         }
@@ -221,7 +227,11 @@ void ChatView::parsePacket(const QByteArray& packet, Player* plr)
                 if ( pkt.at( 3 ) == 'F' )
                 {
                     if ( plr->getCampPacket().isEmpty() )
-                        plr->setCampPacket( packet );
+                    {
+                        qint32 sceneID{ Helper::strToInt( pkt.left( 17 ).mid( 13 ) ) };
+                        if ( sceneID >= 1 ) //If is 0 then it is the well scene and we can ignore the 'camp' packet.
+                            plr->setCampPacket( packet );
+                    }
                 }  //User un-camp. Remove camp packet.
                 else if ( pkt.at( 3 ) == 'f' )
                 {
@@ -244,10 +254,8 @@ void ChatView::parsePacket(const QByteArray& packet, Player* plr)
             //Remove the checksum.
             pkt = pkt.left( pkt.length() - 2 );
 
-            this->insertChat( plr->getPlrName() % ": ",
-                              Colors::Name, true );
-            this->insertChat( pkt,
-                              Colors::Chat, false );
+            this->insertChat( plr->getPlrName() % ": ", Colors::Name, true );
+            this->insertChat( pkt, Colors::Chat, false );
 
             plr->chatPacketFound();
         }
@@ -259,10 +267,13 @@ void ChatView::parsePacket(const QByteArray& packet, Player* plr)
                 plr->setPlrName( plrName );
         }
     }
+    return retn;
 }
 
-void ChatView::parseChatEffect(const QString& packet)
+bool ChatView::parseChatEffect(const QString& packet)
 {
+    bool retn{ true };
+    bool log{ true };
     QString srcSerNum = packet.left( 12 ).mid( 4 );
             srcSerNum = Helper::serNumToIntStr( srcSerNum );
 
@@ -277,7 +288,7 @@ void ChatView::parseChatEffect(const QString& packet)
         //5 = Unknown
         //10 = Scene Message
         //11 = PK Attack
-        return;
+        return true;
     }
 
     if ( packet.at( 3 ) == 'C' )
@@ -292,6 +303,7 @@ void ChatView::parseChatEffect(const QString& packet)
                 if ( Helper::cmpStrings( plr->getSernum_s(), srcSerNum ) )
                 {
                     plrName = plr->getPlrName().append( " [ %1 ]" );
+                    break;
                 }
                 else
                     plr = nullptr;
@@ -302,71 +314,81 @@ void ChatView::parseChatEffect(const QString& packet)
 
         QString message{ packet.mid( 31 ) };
 
-        //TODO: Change into something more complex and better.
-
         //Quick and dirty word replacement.
         if ( server != nullptr )
         {
             //Check if the bleeping rule is set.
             //There's no pint in censoring our chat if we aren't censoring chat
             //for other people.
-            if ( Rules::getNoCursing( server->getName() ) )
+            if ( Rules::getNoCursing( server->getServerName() ) )
                 this->bleepChat( message );
         }
 
         QChar type{ packet.at( 31 ) };
+        switch ( type.toLatin1() )
+        {
+            case '\'': //Gossip Chat Effect.
+                {
+                    message = message.mid( 1 );
+                    this->insertChat( plrName % " gossips: " % message, Colors::Gossip, true );
+                    message = plrName % " gossips: " % message;
+                }
+            break;
+            case '!': //Shout Chat Effect.
+                {
+                    message = message.mid( 1 );
+                    this->insertChat( plrName % " shouts: " % message, Colors::Shout, true );
 
-        if ( type == '\'' )
-        {
-            message = message.mid( 1 );
-            this->insertChat( plrName % " gossips: " % message,
-                              Colors::Gossip, true );
-            message = plrName % " gossips: " % message;
-        }
-        else if ( type == '!' )
-        {
-            message = message.mid( 1 );
-            this->insertChat( plrName % " shouts: " % message,
-                              Colors::Shout, true );
+                    message = plrName % " shouts: " % message;
+                }
+            break;
+            case '/': //Emote Chat Effect.
+                {
+                    message = message.mid( 2 );
+                    this->insertChat( plrName % message, Colors::Emote, true );
+                    message = plrName % message;
+                }
+            break;
+            case '`': //Custom command input.
+                {
+                    auto* cHandle{ this->getCmdHandle() };
+                    if ( cHandle != nullptr )
+                    {
+                        if ( plr != nullptr )
+                        {
+                            message = message.mid( 1 );
+                            cHandle->parseCommandImpl( plr, message );
+                        }
+                    }
+                    log = false;
+                    retn = false;
+                }
+            break;
+            default:
+                {
+                    this->insertChat( plrName % ": ", Colors::Name, true );
+                    this->insertChat( message, Colors::Chat, false );
 
-            message = plrName % " shouts: " % message;
-        }
-        else if ( type == '/' )
-        {
-            message = message.mid( 2 );
-            this->insertChat( plrName % message,
-                              Colors::Emote, true );
-            message = plrName % message;
-        }
-        else
-        {
-            this->insertChat( plrName % ": ",
-                              Colors::Name, true );
-            this->insertChat( message,
-                              Colors::Chat, false );
-
-            message = plrName % ": " % message;
+                    message = plrName % ": " % message;
+                }
+            break;
         }
 
-        if ( !message.isEmpty() )
-        {
-            Logger::getInstance()->insertLog( server->getName(), message,
-                                              LogTypes::Chat, true, true );
-        }
+        if ( !message.isEmpty() && log )
+            emit this->insertLogSignal( server->getServerName(), message, LogTypes::CHAT, true, true );
     }
+    return retn;
 }
 
 void ChatView::bleepChat(QString& message)
 {
-    for ( int i = 0; i <= 439; ++i )
+    for ( const auto& el : bleepList )
     {
-        message = message.replace( bleepList[ i ], "bleep",
-                                   Qt::CaseInsensitive );
+        message = message.replace( el, "bleep", Qt::CaseInsensitive );
     }
 }
 
-void ChatView::insertChat(const QString& msg, const Colors& color,
-                          const bool& newLine)
+void ChatView::insertChat(const QString& msg, const Colors& color, const bool& newLine)
 {
     QTextEdit* obj{ ui->chatView };
     int curScrlPosMax = obj->verticalScrollBar()->maximum();
@@ -407,6 +429,19 @@ void ChatView::insertChat(const QString& msg, const Colors& color,
     }
 }
 
+CmdHandler* ChatView::getCmdHandle() const
+{
+    if ( cmdHandle == nullptr )
+        return nullptr;
+
+    return cmdHandle;
+}
+
+void ChatView::setCmdHandle(CmdHandler* value)
+{
+    cmdHandle = value;
+}
+
 void ChatView::on_chatInput_returnPressed()
 {
     QString message{ ui->chatInput->text() };
@@ -420,10 +455,8 @@ void ChatView::on_chatInput_returnPressed()
         }
     }
 
-    this->insertChat( "Owner: ",
-                      Colors::OwnerName, true );
-    this->insertChat( message,
-                      Colors::OwnerChat, false );
+    this->insertChat( "Owner: ", Colors::OwnerName, true );
+    this->insertChat( message, Colors::OwnerChat, false );
 
     if ( gameID == Games::W97 )
     {
@@ -433,11 +466,8 @@ void ChatView::on_chatInput_returnPressed()
         message.prepend( "Owner: " );
 
     if ( !message.isEmpty() )
-    {
-        Logger::getInstance()->insertLog( server->getName(), message,
-                                          LogTypes::Chat, true, true );
-    }
+        emit this->insertLogSignal( server->getServerName(), message, LogTypes::CHAT, true, true );
 
-    emit this->sendChat( message );
+    emit this->sendChatSignal( message );
     ui->chatInput->clear();
 }

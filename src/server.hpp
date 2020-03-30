@@ -12,12 +12,11 @@ class Server : public QTcpServer
 {
     Q_OBJECT
 
+    static QHash<QHostAddress, QByteArray> bioHash;
     QStandardItemModel* plrViewModel{ nullptr };
     QHash<QString, QStandardItem*> plrTableItems;
-    QHash<QHostAddress, QByteArray> bioHash;
 
     QWidget* mother{ nullptr };
-    QUdpSocket* masterSocket{ nullptr };
 
     Comments* serverComments{ nullptr };
     PacketHandler* pktHandle{ nullptr };
@@ -25,16 +24,12 @@ class Server : public QTcpServer
     ServerInfo* server{ nullptr };
 
     public:
-        Server(QWidget* parent = nullptr, ServerInfo* svr = nullptr,
-               QStandardItemModel* plrView = nullptr);
-        ~Server();
+        Server(QWidget* parent = nullptr, ServerInfo* svr = nullptr, QStandardItemModel* plrView = nullptr);
+        ~Server() override;
 
         void setupServerInfo();
-        void updatePlayerTable(Player* plr, const QHostAddress& peerAddr,
-                               const quint16& port);
-        QStandardItem* updatePlayerTableImpl(const QString& peerIP,
-                                             const QByteArray& data,
-                                             Player* plr, const bool& insert);
+        void updatePlayerTable(Player* plr, const QHostAddress& peerAddr, const quint16& port);
+        QStandardItem* updatePlayerTableImpl(const QString& peerIP, const QByteArray& data, Player* plr, const bool& insert);
 
         Comments* getServerComments() const;
         ChatView* getChatView() const;
@@ -42,9 +37,13 @@ class Server : public QTcpServer
         void userReadyRead(QTcpSocket* socket);
         void userDisconnected(QTcpSocket* socket);
 
+        static QHash<QHostAddress, QByteArray> getBioHash();
+        static void insertBioHash(const QHostAddress& addr, const QByteArray& value);
+        static QByteArray getBioHashValue(const QHostAddress& addr);
+        static QHostAddress getBioHashKey(const QByteArray& bio);
+
     private slots:
         void newConnectionSlot();
-        void readyReadUDPSlot();
 };
 
 #endif // SERVER_HPP

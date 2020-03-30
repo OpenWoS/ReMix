@@ -21,25 +21,24 @@ Comments::Comments(QWidget* parent, ServerInfo* serverInfo) :
 
     server = serverInfo;
 
+    //Register the LogTypes type for use within signals and slots.
+    qRegisterMetaType<LogTypes>("LogTypes");
+
+    //Connect LogFile Signals to the Logger Class.
+    QObject::connect( this, &Comments::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot, Qt::QueuedConnection );
+
     if ( Settings::getSaveWindowPositions() )
     {
-        QByteArray geometry{ Settings::getWindowPositions(
-                                    this->metaObject()->className() ) };
+        QByteArray geometry{ Settings::getWindowPositions( this->metaObject()->className() ) };
         if ( !geometry.isEmpty() )
-        {
-            this->restoreGeometry( Settings::getWindowPositions(
-                                       this->metaObject()->className() ) );
-        }
+            this->restoreGeometry( Settings::getWindowPositions( this->metaObject()->className() ) );
     }
 }
 
 Comments::~Comments()
 {
     if ( Settings::getSaveWindowPositions() )
-    {
-        Settings::setWindowPositions( this->saveGeometry(),
-                                      this->metaObject()->className() );
-    }
+        Settings::setWindowPositions( this->saveGeometry(), this->metaObject()->className() );
     delete ui;
 }
 
@@ -49,24 +48,20 @@ void Comments::setTitle(const QString& name)
         this->setWindowTitle( "Server Comments: [ " % name % " ]" );
 }
 
-void Comments::newUserCommentSlot(const QString& sernum, const QString& alias,
-                                  const QString& message)
+void Comments::newUserCommentSlot(const QString& sernum, const QString& alias, const QString& message)
 {
     QTextEdit* obj = ui->msgView;
     if ( obj == nullptr )
         return;
 
-    uint date = QDateTime::currentDateTime()
+    uint date = QDateTime::currentDateTimeUtc()
                      .toTime_t();
-    QString comment = QString( "\r\n --- \r\n"
-                               "%1 \r\n"
-                               "SerNum: %2 \r\n"
-                               "%3: %4"
-                               "\r\n --- \r\n" )
-                          .arg( Helper::getTimeAsString( date ),
-                                sernum,
-                                alias,
-                                message );
+    QString comment = QString( "\r\n --- \r\n%1 \r\nSerNum: %2 \r\n%3: %4\r\n --- \r\n" )
+                          .arg( Helper::getTimeAsString( date ) )
+                          .arg( sernum )
+                          .arg( alias )
+                          .arg( message );
+
 
     int curScrlPosMax = obj->verticalScrollBar()->maximum();
     int selStart{ 0 };
@@ -95,9 +90,7 @@ void Comments::newUserCommentSlot(const QString& sernum, const QString& alias,
                     obj->verticalScrollBar()->maximum() );
     }
 
-    //Helper::logToFile( Helper::COMMENT, comment, false, false );
-    Logger::getInstance()->insertLog( server->getName(), comment,
-                                      LogTypes::COMMENT, true, true );
+    emit this->insertLogSignal( server->getServerName(), comment, LogTypes::COMMENT, true, true );
 
     //Show the Dialog when a new comment is received.
     if ( !this->isVisible() )

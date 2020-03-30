@@ -35,12 +35,12 @@ ReMixWidget::ReMixWidget(QWidget* parent, ServerInfo* svrInfo) :
     motdWidget = MOTDWidget::getWidget( server );
 
     rules = RulesWidget::getWidget( server );
-    QObject::connect( rules, &RulesWidget::gameInfoChanged,
+    QObject::connect( rules, &RulesWidget::gameInfoChangedSignal, rules,
     [=](const QString& gameInfo)
     {
         server->setGameInfo( gameInfo );
-    });
-    rules->setServerName( server->getName() );
+    }, Qt::QueuedConnection );
+    rules->setServerName( server->getServerName() );
 
     plrWidget = new PlrListWidget( this, server );
     ui->tmpWidget->setLayout( plrWidget->layout() );
@@ -59,7 +59,6 @@ ReMixWidget::ReMixWidget(QWidget* parent, ServerInfo* svrInfo) :
 
     //Create Timer Lambda to update our UI.
     this->initUIUpdate();
-    defaultPalette = parent->palette();
 }
 
 ReMixWidget::~ReMixWidget()
@@ -94,7 +93,7 @@ void ReMixWidget::renameServer(const QString& newName)
         motdWidget->setServerName( newName );
         rules->setServerName( newName );
 
-        server->setName( newName );
+        server->setServerName( newName );
     }
 }
 
@@ -114,7 +113,7 @@ quint32 ReMixWidget::getPlayerCount() const
 
 QString ReMixWidget::getServerName() const
 {
-    return server->getName();
+    return server->getServerName();
 }
 
 Server* ReMixWidget::getTcpServer() const
@@ -133,8 +132,7 @@ quint16 ReMixWidget::getPrivatePort() const
 void ReMixWidget::initUIUpdate()
 {
     //Create and Connect Lamda Objects
-    QObject::connect( server->getUpTimer(), &QTimer::timeout,
-                      server->getUpTimer(),
+    QObject::connect( server->getUpTimer(), &QTimer::timeout, server->getUpTimer(),
     [=]()
     {
         ui->onlineTime->setText( Helper::getTimeFormat( server->getUpTime() ) );
@@ -144,9 +142,7 @@ void ReMixWidget::initUIUpdate()
         QString msg{ "Toggle \"Public Servers\" when ready!" };
         if ( server->getIsPublic() )
         {
-            msg = QString( "Listening for incoming calls "
-                           "to: <a href=\"%1\"><span style=\" text-decoration: "
-                           "underline; color:#007af4;\">%1:%2</span></a>" )
+            msg = QString( "Listening for incoming calls to: <a href=\"%1\"><span style=\" text-decoration: underline; color:#007af4;\">%1:%2</span></a>" )
                       .arg( server->getPrivateIP() )
                       .arg( server->getPrivatePort() );
 
@@ -154,10 +150,7 @@ void ReMixWidget::initUIUpdate()
             {
                 if ( server->getMasterUDPResponse() )
                 {
-                    QString msg2{ " ( Port forward from: %1:%2 ) "
-                                  "( Ping: %3 ms, "
-                                  "Avg: %4 ms, "
-                                  "Trend: %5 ms )" };
+                    QString msg2{ " ( Port forward from: %1:%2 ) ( Ping: %3 ms, Avg: %4 ms, Trend: %5 ms )" };
                             msg2 = msg2.arg( server->getPublicIP() )
                                        .arg( server->getPublicPort() )
                                        .arg( server->getMasterPing() )
@@ -176,19 +169,13 @@ void ReMixWidget::initUIUpdate()
                 }
                 else
                 {
-                    msg = "Sent UDP check-in to Master using:"
-                          "<a href=\"%1\"><span style=\" text-decoration: "
-                          "underline; color:#007af4;\">%1:%2</span></a>. "
+                    msg = "Sent UDP check-in to Master using: <a href=\"%1\"><span style=\" text-decoration: underline; color:#007af4;\">%1:%2</span></a>. "
                           "Waiting for response...";
                     msg = msg.arg( server->getPrivateIP() )
                              .arg( server->getPrivatePort() );
 
                     if ( server->getMasterTimedOut() )
-                    {
-                        msg = "No UDP response received from master server."
-                              " Perhaps we are behind a UDP-blocking"
-                              " firewall?";
-                    }
+                        msg = "No UDP response received from master server. Perhaps we are behind a firewall?";
                 }
             }
 
@@ -196,12 +183,12 @@ void ReMixWidget::initUIUpdate()
             //If it is now invalid, restart the network sockets.
             if ( Settings::getIsInvalidIPAddress( server->getPrivateIP() ) )
             {
-                emit this->reValidateServerIP();
+                emit this->reValidateServerIPSignal();
             }
             plrWidget->resizeColumns();
         }
         ui->networkStatus->setText( msg );
-    });
+    }, Qt::QueuedConnection );
 }
 
 void ReMixWidget::on_openUserInfo_clicked()
@@ -267,15 +254,14 @@ void ReMixWidget::on_isPublicServer_toggled(bool value)
 
 void ReMixWidget::on_networkStatus_linkActivated(const QString& link)
 {
-    QString title = QString( "Invalid IP:" );
-    QString prompt = QString( "Do you wish to mark the IP Address [ %1 ] as "
-                              "invalid and refresh the network interface?" );
+    QString title{ "Invalid IP:" };
+    QString prompt{ "Do you wish to mark the IP Address [ %1 ] as invalid and refresh the network interface?" };
 
     prompt = prompt.arg( link );
     if ( Helper::confirmAction( this, title, prompt ) )
     {
         Settings::setIsInvalidIPAddress( link );
-        emit this->reValidateServerIP();
+        emit this->reValidateServerIPSignal();
 
         title = "Note:";
         prompt = "Please refresh your server list in-game!";
@@ -292,9 +278,7 @@ void ReMixWidget::on_useUPNP_toggled(bool value)
 void ReMixWidget::on_networkStatus_customContextMenuRequested(const QPoint&)
 {
     if ( contextMenu == nullptr )
-    {
         contextMenu = new QMenu( this );
-    }
 
     if ( contextMenu != nullptr )
     {
@@ -312,9 +296,7 @@ void ReMixWidget::on_logButton_clicked()
     if (logUi != nullptr )
     {
         if ( logUi->isVisible() )
-        {
             logUi->hide();
-        }
         else
             logUi->show();
     }

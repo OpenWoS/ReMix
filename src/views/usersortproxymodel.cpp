@@ -11,15 +11,8 @@
 #include <QDateTime>
 #include <QVariant>
 
-UserSortProxyModel::UserSortProxyModel()
-{
-
-}
-
-UserSortProxyModel::~UserSortProxyModel()
-{
-
-}
+UserSortProxyModel::UserSortProxyModel()= default;
+UserSortProxyModel::~UserSortProxyModel() = default;
 
 bool UserSortProxyModel::lessThan(const QModelIndex& left, const QModelIndex& right) const
 {
@@ -40,17 +33,15 @@ bool UserSortProxyModel::lessThan(const QModelIndex& left, const QModelIndex& ri
 
         if ( column == static_cast<int>( UserCols::LastSeen )
           || column == static_cast<int>( UserCols::BanDate )
-          || column == static_cast<int>( UserCols::BanDuration ) )
+          || column == static_cast<int>( UserCols::BanDuration )
+          || column == static_cast<int>( UserCols::MuteDate )
+          || column == static_cast<int>( UserCols::MuteDuration ) )
         {
-            vlStr = QString::number(
-                        QDateTime::fromString( vlStr,
-                                               "ddd MMM dd HH:mm:ss yyyy" )
-                             .toTime_t() );
+            vlStr = QString::number( QDateTime::fromString( vlStr, "ddd MMM dd HH:mm:ss yyyy" )
+                                                    .toTime_t() );
 
-            vrStr = QString::number(
-                        QDateTime::fromString( vrStr,
-                                               "ddd MMM dd HH:mm:ss yyyy" )
-                             .toTime_t() );
+            vrStr = QString::number( QDateTime::fromString( vrStr, "ddd MMM dd HH:mm:ss yyyy" )
+                                                    .toTime_t() );
         }
         else if ( column == static_cast<int>( UserCols::SerNum ) )
         {

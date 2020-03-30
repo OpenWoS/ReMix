@@ -8,17 +8,15 @@
 #include <QtCore>
 
 CmdTable* CmdTable::instance{ nullptr };
-const CmdTable::CmdStruct CmdTable::cmdTable[ GM_COMMAND_COUNT ] =
+const QVector<CmdTable::CmdStruct> CmdTable::cmdTable =
 {
     {   //Command Implemented.
         "help",
-        { "format" },
-        1,
-        "Help Description: Shows command information and syntax. "
-        "e.g. (/help help) and (/help help format)",
-        "Help Usage: /help *Command *format. "
-        "e.g. (/help help) will show the command description, "
-        "and (/help help format) will show the command format.",
+        {},
+        0,
+        "Help Description: Shows command information and syntax.",
+        "Help Usage: /help *Command"
+        "e.g. (/help help) will show the command description and format!",
         GMRanks::User,
         true,
     },
@@ -41,15 +39,15 @@ const CmdTable::CmdStruct CmdTable::cmdTable[ GM_COMMAND_COUNT ] =
         GMRanks::CoAdmin,
         true,
     },
-    {   //Command Unimplemented.
+    {
         //Server UpTime, Connected Users, Connected Admins.
         "info",
         { },
         0,
         "Info Description: Shows the Server Information.",
-        "",
-        GMRanks::Admin,
-        false,
+        "Info Usage: /info",
+        GMRanks::GMaster,
+        true,
     },
     {   //Command Unimplemented.
         //Server Network information. IP, Ping, Bandwidth Used.
@@ -67,8 +65,8 @@ const CmdTable::CmdStruct CmdTable::cmdTable[ GM_COMMAND_COUNT ] =
         { "soul", "ip", "all"  },
         3,
         "Ban Description: Bans the selected user and prevents their future connection to the server.",
-        "Ban Usage: /ban Soul|IP|All <#>s(Seconds) | m(Minutes) | h(Hours) | d(Days) *<Reason(Optional)>. (Duration is default to seconds if not provided). "
-        "e.g. (/ban soul 4000 Bad behavior) or (/ban ip 10.0.0.1 Bad behavior.)",
+        "Ban Usage: /ban Soul|IP|All <#>s(Seconds) | m(Minutes) | h(Hours) | d(Days) *<Reason(Optional)>. (Duration is default to 30 Days if not provided). "
+        "e.g. (/ban soul 4000 Bad Soul!) or (/ban soul 4000 30m Bad Soul!)",
         GMRanks::CoAdmin,
         true,
     },
@@ -98,8 +96,8 @@ const CmdTable::CmdStruct CmdTable::cmdTable[ GM_COMMAND_COUNT ] =
         { "soul", "ip", "all" },
         3,
         "Mute Description: Adds a network mute to the selected User.",
-        "Mute Usage: /mute Soul|IP|All(Permission Required) *Reason (Optional). "
-        "e.g. (/mute soul 4000 Bad behavior) or (/mute ip 10.0.0.1 Bad behavior.)",
+        "Mute Usage: /mute Soul|IP|All <#>s(Seconds) | m(Minutes) | h(Hours) | d(Days) *<Reason(Optional)>. (Duration is default 10 Minutes if not provided). "
+        "e.g. (/mute soul 4000 Bad Soul!) or (/mute soul 4000 30m Bad Soul!)",
         GMRanks::GMaster,
         true,
     },
@@ -238,20 +236,21 @@ CmdTable* CmdTable::getInstance()
 
 bool CmdTable::cmdIsActive(const GMCmds& index)
 {
-    return cmdTable[ static_cast<int>( index ) ].cmdIsActive;
+    return cmdTable.at( static_cast<int>( index ) ).cmdIsActive;
 }
 
 bool CmdTable::isSubCommand(const GMCmds& index, const QString& cmd,
                             const bool& time)
 {
     qint32 idx{ static_cast<int>( index ) };
-    if ( cmdTable[ idx ].subCmdCount > 0 )
+    auto& cmdAt{ cmdTable.at( idx ) };
+    if ( cmdAt.subCmdCount > 0 )
     {
         if ( !time )
         {
-            for ( int i = 0; i < cmdTable[ idx ].subCmdCount; ++i )
+            for ( int i = 0; i < cmdAt.subCmdCount; ++i )
             {
-                if ( Helper::cmpStrings( cmdTable[ idx ].subCmd[ i ], cmd ) )
+                if ( Helper::cmpStrings( cmdAt.subCmd[ i ], cmd ) )
                 {
                     return true;
                 }
@@ -263,47 +262,46 @@ bool CmdTable::isSubCommand(const GMCmds& index, const QString& cmd,
 
 bool CmdTable::getCmdHasSubCmd(const GMCmds& index)
 {
-    return cmdTable[ static_cast<qint32>( index ) ].subCmdCount >= 1;
+    return cmdTable.at( static_cast<qint32>( index ) ).subCmdCount >= 1;
 }
 
 QString CmdTable::getCmdName(const GMCmds& index)
 {
-    return cmdTable[ static_cast<qint32>( index ) ].cmd;
+    return cmdTable.at( static_cast<qint32>( index ) ).cmd;
 }
 
 GMCmds CmdTable::getCmdIndex(const QString& cmd)
 {
     GMCmds index{ GMCmds::Invalid };
-    for ( int i = 0; i < GM_COMMAND_COUNT; ++i )
+    qint32 idx{ -1 };
+    for ( const auto& el : cmdTable )
     {
+        ++idx;
         //Check the current Object if it contains our command information,
-        if ( Helper::cmpStrings( cmdTable[ i ].cmd, cmd ) )
+        if ( Helper::cmpStrings( el.cmd, cmd ) )
         {
             //Make Certain that the command is Activated.
-            if ( cmdTable[ i ].cmdIsActive == true )
-                index = static_cast<GMCmds>( i );
+            if ( el.cmdIsActive )
+                index = static_cast<GMCmds>( idx );
         }
     }
     return index;
 }
 
-qint32 CmdTable::getSubCmdIndex(const GMCmds& cmdIndex,
-                                const QString& subCmd,
-                                const bool& time)
+qint32 CmdTable::getSubCmdIndex(const GMCmds& cmdIndex, const QString& subCmd, const bool& time)
 {
 
     qint32 index{ static_cast<qint32>( GMSubCmds::Invalid ) };
     qint32 cmdIdx{ static_cast<qint32>( cmdIndex ) };
+    qint32 sCmdIdx{ -1 };
+    auto& cmdAt{ cmdTable.at( cmdIdx ) };
     if ( !time )
     {
-        for ( qint32 idx = 0; idx < cmdTable[ cmdIdx ].subCmdCount; ++idx )
+        for ( const auto& el : cmdAt.subCmd )
         {
-            //Check the current Object if it contains our command information,
-            if ( Helper::strContainsStr( cmdTable[ cmdIdx ].subCmd[ idx ],
-                                         subCmd ) )
-            {
-                index = idx;
-            }
+            ++sCmdIdx;
+            if ( Helper::strContainsStr( el, subCmd ) )
+                index = sCmdIdx;
         }
     }
     return index;
@@ -312,9 +310,7 @@ qint32 CmdTable::getSubCmdIndex(const GMCmds& cmdIndex,
 GMRanks CmdTable::getCmdRank(const GMCmds& index)
 {
     if ( this->cmdIsActive( index ) )
-    {
-        return cmdTable[ static_cast<int>( index ) ].cmdRank;
-    }
+        return cmdTable.at( static_cast<int>( index ) ).cmdRank;
 
     //The command is inactive. Return Rank Invalid.
     return GMRanks::Invalid;
@@ -323,14 +319,22 @@ GMRanks CmdTable::getCmdRank(const GMCmds& index)
 QString CmdTable::collateCmdList(const GMRanks& rank)
 {
     QString list{ "Available Command list: " };
-    for ( int i = 0; i < GM_COMMAND_COUNT; ++i )
+    for ( const auto& el : cmdTable )
     {
         //Check the current Object if it contains our command information,
-        if ( cmdTable[ i ].cmdRank <= rank )
+        if ( el.cmdRank <= rank && el.cmdIsActive )
         {
-            //Make Certain that the command is Activated.
-            if ( cmdTable[ i ].cmdIsActive == true )
-                list.append( cmdTable[ i ].cmd % ", " );
+            list.append( el.cmd );
+            if ( el.subCmdCount > 0 )
+            {
+                list.append( "[ " );
+                for ( const auto& sEl : el.subCmd )
+                {
+                    list.append( sEl % ", " );
+                }
+                list.append( " ]" );
+            }
+            list.append( ", " );
         }
     }
     return list;
@@ -339,9 +343,11 @@ QString CmdTable::collateCmdList(const GMRanks& rank)
 QString CmdTable::getCommandInfo(const GMCmds& index, const bool& syntax)
 {
     qint32 idx{ static_cast<int>( index ) };
+    if ( idx < 0 )
+        idx = static_cast<int>( GMCmds::Help );
+
     if ( syntax )
-    {
-        return cmdTable[ idx ].cmdSyntax;
-    }
-    return cmdTable[ idx ].cmdInfo;
+        return cmdTable.at( idx ).cmdSyntax;
+
+    return cmdTable.at( idx ).cmdInfo;
 }

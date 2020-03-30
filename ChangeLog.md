@@ -2,6 +2,156 @@ TODO:
   * Change the IP re-selection to allow the User to select the active network interface and select the working IP address.
   * Implement other remote administrator commands and sub-commands.
 
+Version 2.5.6:
+    Change:
+      * Added a new Threaded Class Object. UdpThread.
+        * This class handles some interactions with Users and the Master Mix via the UDP protocol.
+        * While the PacketHandler class still parses some packet information, the UdpClass parses and handles any packets that require a response.
+        * The ServerInfo class retains control over MasterCheckin timing, and sends a signal to the UdpClass to send the packet itself.
+      * The Logger class now has multiple file handles for each individual log type.
+        * These handles are opened as they are needed, and will remain open until ReMix closes.
+          * These file handles are also closed and re-opened when the date used for the Log Folder changes.
+        * These changes are done in an attempt to reduce file opening and closing overhead.
+      * Convert all calls to the Logger::insertLog() into QObject signals to the Logger class.
+        * These Signals are forwarded to the WriteThread for writing.
+      * Added a new threaded Class Object WriteThread.
+        * This new class handles all file write operations within the Logger Class.
+      
+	  
+
+    Bugfixes:
+      * Reduced latency overhead when pinging a ReMix server hosting multiple Worlds/Games.
+        * The MasterUDP Socket used is now threaded, and should be thread-safe.
+      * Remote Administrator commands will now inform the Admin of an issue if they attempt to use a command on theirself.
+      * Sernum Information is now properly parsed from the MIX5 and MIX6 packet types.
+        * This allows an Admin to log-in before being prompted if they so desire.
+
+
+
+
+
+Version 2.5.5:
+    Change:
+      * Reduced latency when forwarding packets to players.
+        * Packets will be sent to all eligible players at the same time when it is received.
+        * Packets sent by a Player will now properly be ignored when ReMix forwards it to that Player Object.
+        * The Player class will now check if a packet is eligible to be sent to the selected Player.
+        * Parsing of the MIX packets is now handled within the same function as the SR packets.
+      * Consolidated the isBanned, isMuted, removeBan, and removeMute into semi-universal functions. e.g. isPunished, and removePunishment.
+        * Ban and Mutes will no longer check for certain sub-values. Namely; PunishmentTypes::WV, and PunishmentTypes::DV.
+        * These ban types are holdovers from the standard synMix and the checking required to remove the ban isn't worth the effort to retain them any longer.
+        * This means that only the User SerNum and IP addresses are checked for punishments.
+      * The Server class now handles the bioHash as a static object.
+        * Various static functions have been added to facilitate accessing this data from the other Class Objects.
+      * Add two new schemas to the UPNP class from the WiFiAlliance.
+        * "urn:schemas-wifialliance-org:service:WFAWLANConfig:1" and "urn:schemas-wifialliance-org:device:WFADevice:1"
+	  
+
+    Bugfixes:
+      * Properly inform Users when the server has automatically muted their connection.
+      * Properly format the message sent to the User when Muting and Un-Muting from the PlayerListWidget Object.
+        * ReMix also now properly applies the correct Mute duration to the Player Object.
+
+
+
+
+
+Version 2.5.4:
+    Change:
+
+    Bugfixes:
+      * ReMix now detects when a User is within a Well Scene and no longer saves the Camp packet associated with that scene.
+        * Entering camp scenes created before connecting to the server will now correctly function.
+      * Mutes will now once again check if the IP address of the User has an outstanding Mute.
+      * Attempt to prevent checking in to the Master Mix until the Master Mix IP address has been found.
+
+
+
+
+
+Version 2.5.3:
+    Change:
+      * ReMix will now log, and show within the Logger UI when a Server Side Variable is being accessed with a read/write.
+        * The newly generated logs will appear within the log directory and sub directory with the name [QuestLog].
+      * Bans issued via Remote Administrator commands issued with no duration will now default to a 7 day ban.
+        * Previously this was 30 days.
+      * ReMix will now send socket information to newly connecting Users.
+        * This information is used within WoS' skin transfer routines.
+
+
+    Bugfixes:
+      * Server Side Variables when being written will now forward the updated variable information to all connected Users.
+        * Previously no update information was being sent. It has been verified that the intended behaviour was to forward the update to connected Users.
+      * Corrected a state mismatch with the message being sent with the /vanish admin command.
+        * When no sub-command was issued, the state would always show as being "invisible" within the message being sent to the Remote Administrator.
+      * ReMix will no longer attempt to re-forward a port via UPNP that it has decided should be a permanent forward.
+      * Fix build error.
+
+    Source:
+      * Begin converting the source from a 80 column text limit to 180 columns.
+
+
+
+
+
+Version 2.5.2:
+    Change:
+      * Users who have been Muted will no longer have the ability to send comments via the Admin Window to the Server Host.
+
+
+    Bugfixes:
+      * Remote Administrator commands will no longer send a warning that the selected target is an Admin or Offline if neither state is true.
+      * Mutes, whether automatic or remote-initiated via Admin Commands will now default to 10 minutes.
+        * This duration was previously 30 Days.
+      * Chat from the Chat view will no longer appear within the Logger UI.
+      * When the "Ban Duplicate IP's" option is enabled, Users will now only be banned for a duration of 10 Minutes.
+        * This duration was previously 30 Days.
+
+
+
+
+Version 2.5.1:
+    Change:
+      * Implemented Mute durations.
+
+
+    Bugfixes:
+      * User Camp packets are no longer spammed when a new User connects to a server with Camped Users.
+        * Camp packets are now only sent to the newly connecting User.
+
+
+
+
+Version 2.5.0:
+    Change:
+      * Implement the "/info" command.
+        * Sends basic information about the server's up time, users connected, and admins connected.
+      * Implement packet deobfuscation code from the PacketForge module within ReMix itself.
+      * Added the ability to utilize ReMote Administrator commands from within the regular chat box (bypassing /admin) on GameTypes supporting commands.
+        * Commands entered in this way must begin with "  `  " (tilde). e.g. `ban soul 4000 30m Testing the new command!
+        * All chat beginning with `(tilde) will be ommitted from further packet processing and/or re-sending.
+      * The "/help" command now sends both command description and usage and no longer has a "format" sub command.
+
+
+    Bugfixes:
+      * Prevent Clients from forging a MasterMix response packet.
+      * Prevent setting the GameInfo string within a ServerInstance's name. e.g. "ReMix Server [world=Evergreen]" is no longer possible.
+      * Prevent comments from Users that have not yet sent their SerNum.
+        * This is related to another bugfix from version [2.4.7].
+      * Mark certain functions and constructors as overrides or defaults.
+      * Properly cast certain UI events to their correct type.
+      * Correctly inform Remote Administrators when they attempt to use a command they lack access to.
+
+
+
+
+Version 2.4.9:
+    Buildsystem:
+      * Convert the ReMix project from Qbs to CMake.
+
+
+
+
 Version 2.4.8:
     Change:
       * ReMix will now store and re-send packets with the OpCode( "F", Camp Initiated ).

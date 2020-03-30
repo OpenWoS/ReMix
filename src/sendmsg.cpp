@@ -21,13 +21,9 @@ SendMsg::SendMsg(const QString& serNum, QWidget* parent) :
 
     if ( Settings::getSaveWindowPositions() )
     {
-        QByteArray geometry{ Settings::getWindowPositions(
-                                    this->metaObject()->className() ) };
+        QByteArray geometry{ Settings::getWindowPositions( this->metaObject()->className() ) };
         if ( !geometry.isEmpty() )
-        {
-            this->restoreGeometry( Settings::getWindowPositions(
-                                       this->metaObject()->className() ) );
-        }
+            this->restoreGeometry( Settings::getWindowPositions( this->metaObject()->className() ) );
     }
 
     //Install EventFilters.
@@ -38,10 +34,8 @@ SendMsg::SendMsg(const QString& serNum, QWidget* parent) :
 SendMsg::~SendMsg()
 {
     if ( Settings::getSaveWindowPositions() )
-    {
-        Settings::setWindowPositions( this->saveGeometry(),
-                                      this->metaObject()->className() );
-    }
+        Settings::setWindowPositions( this->saveGeometry(), this->metaObject()->className() );
+
     delete ui;
 }
 
@@ -67,16 +61,16 @@ void SendMsg::on_sendMsg_clicked()
     message = message.prepend( "Owner: " );
     Helper::stripNewlines( message );
 
-    emit this->forwardMessage( message );
+    emit this->forwardMessageSignal( message );
     this->close();
 }
 
 bool SendMsg::eventFilter(QObject* obj, QEvent* event)
 {
-    if ( obj == nullptr || event == nullptr  )
+    if ( obj == nullptr || event == nullptr )
         return false;
 
-    QKeyEvent* key = static_cast<QKeyEvent*>( event );
+    auto* key = dynamic_cast<QKeyEvent*>( event );
     bool accept{ false };
 
     if ( key != nullptr
@@ -108,5 +102,5 @@ bool SendMsg::eventFilter(QObject* obj, QEvent* event)
     if ( accept )
         return accept;
 
-    return QObject::eventFilter( obj, event );
+    return QDialog::eventFilter( obj, event );
 }

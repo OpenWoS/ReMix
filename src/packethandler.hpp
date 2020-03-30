@@ -21,20 +21,16 @@ class PacketHandler : public QObject
 
     public:
         PacketHandler(ServerInfo* svr, ChatView* chat);
-        ~PacketHandler();
+        ~PacketHandler() override;
 
         void startMasterCheckIn();
         void stopMasterCheckIn();
 
         void parsePacket(const QByteArray& packet, Player* plr = nullptr);
-        void parseSRPacket(const QString& packet, Player* plr = nullptr);
-        void parseMIXPacket(const QString& packet, Player* plr = nullptr);
-
-        void parseUDPPacket(const QByteArray& udp, const QHostAddress& ipAddr,
-                            const quint16& port,
-                            QHash<QHostAddress, QByteArray>* bioHash);
+        void parseUDPPacket(const QByteArray& udp, const QHostAddress& ipAddr, const quint16& port);
 
         bool checkBannedInfo(Player* plr) const;
+        bool getIsBanned(const QString& serNum, const QString& ipAddr, const QString& plrSerNum) const;
 
     private:
         void detectFlooding(Player* plr);
@@ -49,10 +45,13 @@ class PacketHandler : public QObject
         void readMIX7(const QString& packet, Player* plr);
         void readMIX8(const QString& packet, Player* plr);
         void readMIX9(const QString& packet, Player* plr);
+        void handleSSVReadWrite(const QString& packet, Player* plr, const bool write);
 
     signals:
-        void newUserCommentSignal(const QString& sernum, const QString& alias,
-                                  const QString& message);
+        void newUserCommentSignal(const QString& sernum, const QString& alias, const QString& message);
+        void sendPacketToPlayerSignal(Player* plr, QTcpSocket* srcSocket, qint32 targetType, quint32 trgSerNum, quint32 trgScene, const QByteArray& packet);
+
+        void insertLogSignal(const QString& source, const QString& message, const LogTypes& type, const bool& logToFile, const bool& newLine) const;
 };
 
 #endif // PACKETHANDLER_HPP

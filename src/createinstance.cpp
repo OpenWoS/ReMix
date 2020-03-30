@@ -18,7 +18,7 @@
 #include <QSettings>
 
 //Initialize our accepted Command List.
-const QString CreateInstance::gameNames[ GAME_NAME_COUNT ] =
+const QStringList CreateInstance::gameNames =
 {
     "WOS",
     "TOY",
@@ -46,6 +46,7 @@ CreateInstance::~CreateInstance()
 
 void CreateInstance::updateServerList(const bool& firstRun)
 {
+    QMutexLocker locker( &mutex );
     ui->servers->clear();
     ui->servers->addItem( "" );  //First item will always be blank.
 
@@ -60,12 +61,10 @@ void CreateInstance::updateServerList(const bool& firstRun)
     for ( int i = 0; i < servers.count(); ++i )
     {
         name = servers.at( i );
-        for ( int i = 0; i < SETTINGS_KEY_COUNT; ++i )
+        for ( const auto& key : Settings::keys )
         {
-            if ( Helper::cmpStrings( name, Settings::keys[ i ] ) )
-            {
+            if ( Helper::cmpStrings( name, key ) )
                 skip = true;
-            }
         }
 
         if ( !skip )
@@ -108,27 +107,35 @@ void CreateInstance::updateServerList(const bool& firstRun)
 void CreateInstance::on_initializeServer_clicked()
 {
     QString svrName{ ui->servers->currentText() };
+    QString title{ "Error:" };
+    QString message{ "Servers cannot be initialized without a name!" };
     if ( !svrName.isEmpty() )
     {
-        ServerInfo* server = new ServerInfo();
-        if ( server == nullptr )    //Failed to create the ServerInfo instance.
-            return;
+        if ( Helper::strContainsStr( svrName, "world=" ) )
+        {
+            message = "Servers cannot be initialized with the World selection within the name. Please try again.";
+            Helper::warningMessage( this, title, message );
+        }
+        else
+        {
+            auto* server = new ServerInfo();
+            if ( server == nullptr ) //Failed to create the ServerInfo instance.
+                return;
 
-        server->setName( svrName );
-        server->setGameName( gameNames[ ui->gameName->currentIndex() ] );
-        Helper::getSynRealData( server );
-        server->setPrivatePort( ui->portNumber->text( ).toUShort() );
-        server->setServerID( Settings::getServerID( svrName ) );
-        server->setUseUPNP( ui->useUPNP->isChecked() );
-        server->setIsPublic( ui->isPublic->isChecked() );
+            server->setServerName( svrName );
+            server->setGameName( gameNames[ ui->gameName->currentIndex() ] );
+            Helper::getSynRealData( server );
+            server->setPrivatePort( ui->portNumber->text( ).toUShort() );
+            server->setServerID( Settings::getServerID( svrName ) );
+            server->setUseUPNP( ui->useUPNP->isChecked() );
+            server->setIsPublic( ui->isPublic->isChecked() );
 
-        emit this->createServerAcceptedSignal( server );
-        emit this->accept();
+            emit this->createServerAcceptedSignal( server );
+            emit this->accept();
+        }
     }
     else
     {
-        QString title{ "Error:" };
-        QString message{ "Servers cannot be initialized without a name!" };
         Helper::warningMessage( this, title, message );
     }
 }
@@ -163,19 +170,17 @@ quint16 CreateInstance::genPort()
     return port;
 }
 
-void CreateInstance::restartServer(const QString& name, const QString& gameName,
-                                   const quint16& port, const bool& useUPNP,
-                                   const bool& isPublic)
+void CreateInstance::restartServer(const QString& name, const QString& gameName, const quint16& port, const bool& useUPNP, const bool& isPublic)
 {
     if ( !name.isEmpty() )
     {
-        ServerInfo* server = new ServerInfo();
+        auto* server = new ServerInfo();
 
         //Failed to create the ServerInfo instance.
         if ( server == nullptr )
             return;
 
-        server->setName( name );
+        server->setServerName( name );
         server->setGameName( gameName );
         Helper::getSynRealData( server );
         server->setPrivatePort( port );
@@ -215,9 +220,7 @@ void CreateInstance::closeEvent(QCloseEvent* event)
     if ( event->type() == QEvent::Close )
     {
         QString title = QString( "Close ReMix:" );
-        QString prompt = QString( "You are about to shut down your ReMix "
-                                  "game server!\r\n\r\nAre you "
-                                  "certain?" );
+        QString prompt = QString( "You are about to shut down your ReMix game server!\r\n\r\nAre you certain?" );
 
         if ( ReMixTabWidget::getInstanceCount() == 0 )
         {
@@ -256,11 +259,11 @@ void CreateInstance::on_servers_currentIndexChanged(int)
         if ( !gameName.isEmpty() )
         {
             bool notFound{ true };
-            for ( int i = 0; i < GAME_NAME_COUNT; ++i )
+            for ( const auto& el : gameNames )
             {
-                if ( Helper::cmpStrings( gameNames[ i ], gameName ) )
+                if ( Helper::cmpStrings( el, gameName ) )
                 {
-                    ui->gameName->setCurrentIndex( i );
+                    ui->gameName->setCurrentIndex( gameNames.indexOf( el ) );
                     notFound = false;
                 }
             }

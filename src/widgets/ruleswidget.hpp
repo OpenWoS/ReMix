@@ -31,7 +31,7 @@ class RulesWidget : public QWidget
 
     public:
         explicit RulesWidget();
-        ~RulesWidget();
+        ~RulesWidget() override;
 
         static RulesWidget* getWidget(ServerInfo* server);
         static void deleteWidget(ServerInfo* server);
@@ -48,7 +48,7 @@ class RulesWidget : public QWidget
         void on_rulesView_itemClicked(QTableWidgetItem *item);
 
     signals:
-        void gameInfoChanged(const QString& gameInfo);
+        void gameInfoChangedSignal(const QString& gameInfo);
 
     private:
         Ui::RulesWidget* ui;

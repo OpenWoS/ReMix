@@ -28,6 +28,12 @@ PlrListWidget::PlrListWidget(QWidget* parent, ServerInfo* svr) :
 {
     ui->setupUi(this);
 
+    //Register the LogTypes type for use within signals and slots.
+    qRegisterMetaType<LogTypes>("LogTypes");
+
+    //Connect LogFile Signals to the Logger Class.
+    QObject::connect( this, &PlrListWidget::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot, Qt::QueuedConnection );
+
     server = svr;
 
     //Create our Context Menus
@@ -35,22 +41,14 @@ PlrListWidget::PlrListWidget(QWidget* parent, ServerInfo* svr) :
 
     //Setup the PlayerInfo TableView.
     plrModel = new QStandardItemModel( 0, 8, nullptr );
-    plrModel->setHeaderData( static_cast<int>( PlrCols::IPPort ),
-                             Qt::Horizontal, "Player IP:Port" );
-    plrModel->setHeaderData( static_cast<int>( PlrCols::SerNum ),
-                             Qt::Horizontal, "SerNum" );
-    plrModel->setHeaderData( static_cast<int>( PlrCols::Age ),
-                             Qt::Horizontal, "Age" );
-    plrModel->setHeaderData( static_cast<int>( PlrCols::Alias ),
-                             Qt::Horizontal, "Alias" );
-    plrModel->setHeaderData( static_cast<int>( PlrCols::Time ),
-                             Qt::Horizontal, "Time" );
-    plrModel->setHeaderData( static_cast<int>( PlrCols::BytesIn ),
-                             Qt::Horizontal, "IN" );
-    plrModel->setHeaderData( static_cast<int>( PlrCols::BytesOut ),
-                             Qt::Horizontal, "OUT" );
-    plrModel->setHeaderData( static_cast<int>( PlrCols::BioData ),
-                             Qt::Horizontal, "BIO" );
+    plrModel->setHeaderData( static_cast<int>( PlrCols::IPPort ), Qt::Horizontal, "Player IP:Port" );
+    plrModel->setHeaderData( static_cast<int>( PlrCols::SerNum ), Qt::Horizontal, "SerNum" );
+    plrModel->setHeaderData( static_cast<int>( PlrCols::Age ), Qt::Horizontal, "Age" );
+    plrModel->setHeaderData( static_cast<int>( PlrCols::Alias ), Qt::Horizontal, "Alias" );
+    plrModel->setHeaderData( static_cast<int>( PlrCols::Time ), Qt::Horizontal, "Time" );
+    plrModel->setHeaderData( static_cast<int>( PlrCols::BytesIn ), Qt::Horizontal, "IN" );
+    plrModel->setHeaderData( static_cast<int>( PlrCols::BytesOut ), Qt::Horizontal, "OUT" );
+    plrModel->setHeaderData( static_cast<int>( PlrCols::BioData ), Qt::Horizontal, "BIO" );
 
     //Proxy model to support sorting without actually
     //altering the underlying model
@@ -61,9 +59,7 @@ PlrListWidget::PlrListWidget(QWidget* parent, ServerInfo* svr) :
     ui->playerView->setModel( plrProxy );
 
     //Install Event Filter to enable Row-Deslection.
-    ui->playerView->viewport()->installEventFilter(
-                                    new TblEventFilter( ui->playerView,
-                                                        plrProxy ) );
+    ui->playerView->viewport()->installEventFilter( new TblEventFilter( ui->playerView, plrProxy ) );
 }
 
 PlrListWidget::~PlrListWidget()
@@ -102,15 +98,13 @@ void PlrListWidget::initContextMenu()
 
 void PlrListWidget::on_playerView_customContextMenuRequested(const QPoint& pos)
 {
-    QModelIndex menuIndex = plrProxy->mapToSource(
-                                ui->playerView->indexAt( pos ) );
+    QModelIndex menuIndex{ plrProxy->mapToSource( ui->playerView->indexAt( pos ) ) };
 
     this->initContextMenu();
     if ( menuIndex.row() >= 0 )
     {
         Player* plr = server->getPlayer(
-                          server->getQItemSlot(
-                              plrModel->item( menuIndex.row(), 0 ) ) );
+                          server->getQItemSlot( plrModel->item( menuIndex.row(), 0 ) ) );
         if ( plr != nullptr )
             menuTarget = plr;
 
@@ -121,7 +115,7 @@ void PlrListWidget::on_playerView_customContextMenuRequested(const QPoint& pos)
             else
                 ui->actionMakeAdmin->setText( "Make Admin" );
 
-            if ( menuTarget->getNetworkMuted() )
+            if ( menuTarget->getIsMuted() )
                 ui->actionMuteNetwork->setText( "Un-Mute Network" );
             else
                 ui->actionMuteNetwork->setText( "Mute Network" );
@@ -154,21 +148,17 @@ void PlrListWidget::on_actionMakeAdmin_triggered()
     if ( menuTarget == nullptr )
         return;
 
-    QString revoke{ "Your Remote Administrator privileges have been revoked "
-                    "by the Server Host. Please contact the Server Host "
-                    "if you believe this was in error." };
-    QString reinstated{ "Your Remote Administrator privelages have been "
-                        "partially reinstated by the Server Host." };
+    QString revoke{ "Your Remote Administrator privileges have been revoked by the Server Host. Please contact the Server Host "
+                   "if you believe this was in error." };
+    QString reinstated{ "Your Remote Administrator privelages have been partially reinstated by the Server Host." };
 
     QString sernum{ menuTarget->getSernumHex_s() };
     QString prompt{ "" };
     if ( !User::getIsAdmin( sernum ) )
     {
         QString title{ "Create Admin:" };
-        prompt =  "Are you certain you want to MAKE [ %1 ] a Remote Admin?"
-                  "\r\n\r\nPlease make sure you trust [ %1 ] as this will "
-                  "allow the them to utilize Admin commands that can remove "
-                  "the ability for other users to connect to the Server.";
+        prompt =  "Are you certain you want to MAKE [ %1 ] a Remote Admin? \r\n\r\nPlease make sure you trust [ %1 ] as this will "
+                  "allow the them to utilize Admin commands that can remove the ability for other users to connect to the Server.";
         prompt = prompt.arg( Helper::serNumToIntStr( sernum ) );
 
         if ( Helper::confirmAction( this, title, prompt ) )
@@ -200,33 +190,62 @@ void PlrListWidget::on_actionMakeAdmin_triggered()
 
 void PlrListWidget::on_actionMuteNetwork_triggered()
 {
-    bool mute{ true };
-    if ( menuTarget != nullptr )
-    {
-        QString title{ "%1 User:" };
-        QString prompt{ "Are you certain you want to %1 [ %2 ]'s Network?" };
-        if ( menuTarget->getNetworkMuted() )
-        {
-            title = title.arg( "Un-Mute" );
-            prompt = prompt.arg( "Un-Mute" );
+    if ( menuTarget == nullptr )
+        return;
 
-            mute = false;
+    QString inform{ "The Server Host has %1 you. Reason: %2" };
+    QString reason{ "Manual %1; %2" };
+    QString type{ "" };
+    bool mute{ true };
+
+    QString title{ "%1 User:" };
+    QString prompt{ "Are you certain you want to %1 [ %2 ]'s Network?" };
+    if ( menuTarget->getIsMuted() )
+    {
+        title = title.arg( "Un-Mute" );
+        prompt = prompt.arg( "Un-Mute" );
+        type = "Un-Muted";
+        reason = reason.arg( "Un-Mute" );
+
+        mute = false;
+    }
+    else
+    {
+        title = title.arg( "Mute" );
+        prompt = prompt.arg( "Mute" );
+        type = "Muted";
+        reason = reason.arg( "Mute" );
+    }
+
+    prompt = prompt.arg( menuTarget->getSernum_s() );
+
+    if ( Helper::confirmAction( this, title, prompt ) )
+    {
+        reason = reason.arg( User::requestReason( this ) );
+        inform = inform.arg( type )
+                       .arg( reason );
+
+        PunishDurations muteDuration{ PunishDurations::Invalid };
+        if ( mute )
+        {
+            muteDuration = User::requestDuration();
+            User::addMute( nullptr, menuTarget, reason, false, false, muteDuration );
         }
         else
-        {
-            title = title.arg( "Mute" );
-            prompt = prompt.arg( "Mute" );
-        }
-        prompt = prompt.arg( menuTarget->getSernum_s() );
+            User::removePunishment( menuTarget->getSernumHex_s(), PunishTypes::Mute, PunishTypes::SerNum );
 
-        if ( Helper::confirmAction( this, title, prompt ) )
-        {
-            QString msg{ "Manual Network %1 of [ %2 ] by Server Owner." };
-                    msg = msg.arg( mute ? "Mute" : "UnMute" )
-                             .arg( menuTarget->getSernum_s() );
-            menuTarget->setNetworkMuted( mute, msg );
-        }
+        menuTarget->setIsMuted( static_cast<quint64>( muteDuration ) );
+
+        QString logMsg{ "%1: [ %2 ], [ %3 ]" };
+        logMsg = logMsg.arg( reason )
+                       .arg( menuTarget->getSernum_s() )
+                       .arg( menuTarget->getBioData() );
+
+        emit this->insertLogSignal( server->getServerName(), logMsg,LogTypes::PUNISHMENT, true, true );
+
+        menuTarget->sendMessage( inform, false );
     }
+
     menuTarget = nullptr;
 }
 
@@ -239,11 +258,10 @@ void PlrListWidget::on_actionDisconnectUser_triggered()
     if ( sock != nullptr )
     {
         QString title{ "Disconnect User:" };
-        QString prompt{ "Are you certain you want to DISCONNECT [ " %
-                        menuTarget->getSernum_s() % " ]?" };
+        QString prompt{ "Are you certain you want to DISCONNECT [ %1 ]?" };
+                prompt = prompt.arg( menuTarget->getSernum_s() );
 
-        QString inform{ "The Server Host has disconnected you from the Server. "
-                        "Reason: %1" };
+        QString inform{ "The Server Host has disconnected you from the Server. Reason: %1" };
         QString reason{ "Manual Disconnect; %1" };
 
         if ( Helper::confirmAction( this, title, prompt ) )
@@ -260,8 +278,7 @@ void PlrListWidget::on_actionDisconnectUser_triggered()
                            .arg( menuTarget->getSernum_s() )
                            .arg( menuTarget->getBioData() );
 
-            Logger::getInstance()->insertLog( server->getName(), logMsg,
-                                              LogTypes::DC, true, true );
+            emit this->insertLogSignal( server->getServerName(), logMsg, LogTypes::PUNISHMENT, true, true );
         }
     }
     menuTarget = nullptr;
@@ -273,8 +290,8 @@ void PlrListWidget::on_actionBANISHUser_triggered()
         return;
 
     QString title{ "Ban SerNum:" };
-    QString prompt{ "Are you certain you want to BANISH User [ "
-                  % menuTarget->getSernum_s() % " ]?" };
+    QString prompt{ "Are you certain you want to BANISH User [ %1 ]?" };
+            prompt = prompt.arg( menuTarget->getSernum_s() );
 
     QString inform{ "The Server Host has BANISHED you. Reason: %1" };
     QString reason{ "Manual Banish; %1" };
@@ -284,10 +301,10 @@ void PlrListWidget::on_actionBANISHUser_triggered()
     {
         if ( Helper::confirmAction( this, title, prompt ) )
         {
-            reason = reason.arg( User::requestBanishReason( this ) );
+            reason = reason.arg( User::requestReason( this ) );
             inform = inform.arg( reason );
 
-            PunishDurations banDuration{ User::requestPunishDuration() };
+            PunishDurations banDuration{ User::requestDuration() };
             User::addBan( nullptr, menuTarget, reason, false, banDuration );
 
             QString logMsg{ "%1: [ %2 ], [ %3 ]" };
@@ -295,8 +312,7 @@ void PlrListWidget::on_actionBANISHUser_triggered()
                            .arg( menuTarget->getSernum_s() )
                            .arg( menuTarget->getBioData() );
 
-            Logger::getInstance()->insertLog( server->getName(), logMsg,
-                                              LogTypes::BAN, true, true );
+            emit this->insertLogSignal( server->getServerName(), logMsg, LogTypes::PUNISHMENT, true, true );
 
             menuTarget->sendMessage( inform, false );
             if ( sock->waitForBytesWritten() )

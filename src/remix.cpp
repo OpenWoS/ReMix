@@ -31,13 +31,9 @@ ReMix::ReMix(QWidget* parent) :
     this->setInstance( this );
     if ( Settings::getSaveWindowPositions() )
     {
-        QByteArray geometry{ Settings::getWindowPositions(
-                                    this->metaObject()->className() ) };
+        QByteArray geometry{ Settings::getWindowPositions( this->metaObject()->className() ) };
         if ( !geometry.isEmpty() )
-        {
-            this->restoreGeometry( Settings::getWindowPositions(
-                                       this->metaObject()->className() ) );
-        }
+            this->restoreGeometry( Settings::getWindowPositions( this->metaObject()->className() ) );
     }
 
     //Setup Objects.
@@ -62,10 +58,7 @@ ReMix::ReMix(QWidget* parent) :
 ReMix::~ReMix()
 {
     if ( Settings::getSaveWindowPositions() )
-    {
-        Settings::setWindowPositions( this->saveGeometry(),
-                                      this->metaObject()->className() );
-    }
+        Settings::setWindowPositions( this->saveGeometry(), this->metaObject()->className() );
 
     if ( trayObject != nullptr )
         trayObject->deleteLater();
@@ -108,7 +101,7 @@ void ReMix::updateTitleBars(ServerInfo* server)
 
     QString title{ "ReMix[ %1 ]: %2 [ %3 ]" };
             title = title.arg( QString( REMIX_VERSION ) )
-                         .arg( server->getName() )
+                         .arg( server->getServerName() )
                          .arg( server->getPrivatePort() );
 
     ReMix::getInstance()->setWindowTitle( title );
@@ -129,24 +122,19 @@ void ReMix::initSysTray()
         trayObject->show();
 
         QAction* showAction = new QAction( "Show", this );
-        QObject::connect( showAction, &QAction::triggered,
-                          this, &QMainWindow::show );
+        QObject::connect( showAction, &QAction::triggered, this, &QMainWindow::show, Qt::QueuedConnection );
 
         QAction* hideAction = new QAction( "Hide", this );
-        QObject::connect( hideAction, &QAction::triggered,
-                          this, &QMainWindow::hide );
+        QObject::connect( hideAction, &QAction::triggered, this, &QMainWindow::hide, Qt::QueuedConnection );
 
         QAction* minimizeAction = new QAction( "Minimize", this );
-        QObject::connect( minimizeAction, &QAction::triggered,
-                          this, &QMainWindow::hide );
+        QObject::connect( minimizeAction, &QAction::triggered, this, &QMainWindow::hide, Qt::QueuedConnection );
 
         QAction* maximizeAction = new QAction( "Maximize", this );
-        QObject::connect( maximizeAction, &QAction::triggered,
-                          this, &QMainWindow::showMaximized );
+        QObject::connect( maximizeAction, &QAction::triggered, this, &QMainWindow::showMaximized, Qt::QueuedConnection );
 
         QAction* restoreAction = new QAction( "Restore", this );
-        QObject::connect( restoreAction, &QAction::triggered,
-                          this, &QMainWindow::showNormal );
+        QObject::connect( restoreAction, &QAction::triggered, this, &QMainWindow::showNormal, Qt::QueuedConnection );
 
         QAction* quitAction = new QAction( "Quit", this );
         QObject::connect( quitAction, &QAction::triggered, quitAction,
@@ -155,7 +143,7 @@ void ReMix::initSysTray()
             //Allow Rejection of a Global CloseEvent.
             if ( !this->rejectCloseEvent() )
                 qApp->quit();
-        });
+        }, Qt::QueuedConnection );
 
         trayMenu = new QMenu( this );
         trayMenu->addAction( showAction );
@@ -174,8 +162,7 @@ void ReMix::initSysTray()
                 if ( this->isHidden() )
                 {
                     this->show();
-                    this->setWindowState( this->windowState()
-                                        & ~Qt::WindowMinimized );
+                    this->setWindowState( this->windowState() & ~Qt::WindowMinimized );
                     this->activateWindow();
                 }
                 else
@@ -244,19 +231,16 @@ bool ReMix::rejectCloseEvent()
     QString title = QString( "Close [ %1 ] Server Instances:" )
                         .arg( serverUI->getServerCount() );
 
-    QString prompt = QString( "You are about to shut down your ReMix game "
-                              "server!\r\nThis will affect [ %1 ] User(s) "
+    QString prompt = QString( "You are about to shut down your ReMix game server!\r\nThis will affect [ %1 ] User(s) "
                               "connected to it.\r\n\r\nAre you certain?" )
                          .arg( serverUI->getPlayerCount() );
 
-    serverUI->sendMultiServerMessage( "The admin is taking this server "
-                                       "down..." );
+    serverUI->sendMultiServerMessage( "The admin is taking this server down..." );
 
     if ( !Helper::confirmAction( this, title, prompt ) )
     {
         exiting = false;
-        serverUI->sendMultiServerMessage( "The admin changed his or her "
-                                           "mind! (yay!)..." );
+        serverUI->sendMultiServerMessage( "The admin changed his or her mind! (yay!)..." );
         return true;
     }
     return false;

@@ -17,18 +17,18 @@ class SendMsg : public QDialog
 
     public:
         explicit SendMsg(const QString& serNum, QWidget* parent = nullptr);
-        ~SendMsg();
+        ~SendMsg() override;
 
         bool sendToAll() const;
 
     private:
-        bool eventFilter(QObject* obj, QEvent* event);
+        bool eventFilter(QObject* obj, QEvent* event) override;
 
     private slots:
         void on_sendMsg_clicked();
 
     signals:
-        void forwardMessage(const QString&);
+        void forwardMessageSignal(const QString&);
 
     private:
         Ui::SendMsg* ui;
