@@ -20,29 +20,26 @@ SettingsWidget::SettingsWidget(QWidget* parent) :
     ui->setupUi(this);
 
     //Load Settings from file.
-    pwdCheckState = Settings::getRequirePassword();
+    this->setCheckedState( Toggles::SAVEWINDOWPOSITIONS, Settings::getSetting( SKeys::Setting, SSubKeys::SaveWindowPositions ).toBool() );
+    this->setCheckedState( Toggles::DCBLUECODEDSERNUMS, Settings::getSetting( SKeys::Setting, SSubKeys::DCBlueCodedSerNums ).toBool() );
+    this->setCheckedState( Toggles::INFORMADMINLOGIN, Settings::getSetting( SKeys::Setting, SSubKeys::InformAdminLogin ).toBool() );
+    this->setCheckedState( Toggles::MINIMIZETOTRAY, Settings::getSetting( SKeys::Setting, SSubKeys::MinimizeToTray ).toBool() );
+    this->setCheckedState( Toggles::DISCONNECTIDLES, Settings::getSetting( SKeys::Setting, SSubKeys::AllowIdle ).toBool() );
+    this->setCheckedState( Toggles::ECHOCOMMENTS, Settings::getSetting( SKeys::Setting, SSubKeys::EchoComments ).toBool() );
+    this->setCheckedState( Toggles::FWDCOMMENTS, Settings::getSetting( SKeys::Setting, SSubKeys::FwdComments ).toBool() );
+    this->setCheckedState( Toggles::ALLOWDUPEDIP, Settings::getSetting( SKeys::Setting, SSubKeys::AllowDupe ).toBool() );
+    this->setCheckedState( Toggles::LOGCOMMENTS, Settings::getSetting( SKeys::Logger, SSubKeys::LogComments ).toBool() );
+    this->setCheckedState( Toggles::BANDUPEDIP, Settings::getSetting( SKeys::Setting, SSubKeys::BanDupes ).toBool() );
+    this->setCheckedState( Toggles::REQSERNUM, Settings::getSetting( SKeys::Setting, SSubKeys::ReqSerNum ).toBool() );
+    this->setCheckedState( Toggles::ALLOWSSV, Settings::getSetting( SKeys::Setting, SSubKeys::AllowSSV ).toBool() );
+    this->setCheckedState( Toggles::LOGFILES, Settings::getSetting( SKeys::Logger, SSubKeys::LogFiles ).toBool() );
 
-    this->setCheckedState( Toggles::REQPWD, pwdCheckState );
-    //this->setCheckedState( Toggles::REQADMINPWD, Settings::getReqAdminAuth() );
-    this->setCheckedState( Toggles::ALLOWDUPEDIP, Settings::getAllowDupedIP() );
-    this->setCheckedState( Toggles::BANDUPEDIP, Settings::getBanDupedIP() );
-    //this->setCheckedState( Toggles::BANHACKERS, Settings::getBanDeviants() );
-    this->setCheckedState( Toggles::REQSERNUM, Settings::getReqSernums() );
-    this->setCheckedState( Toggles::DISCONNECTIDLES, Settings::getDisconnectIdles() );
-    this->setCheckedState( Toggles::ALLOWSSV, Settings::getAllowSSV() );
-    this->setCheckedState( Toggles::LOGCOMMENTS, Settings::getLogComments() );
-    this->setCheckedState( Toggles::FWDCOMMENTS, Settings::getFwdComments() );
-    this->setCheckedState( Toggles::INFORMADMINLOGIN, Settings::getInformAdminLogin() );
-    this->setCheckedState( Toggles::ECHOCOMMENTS, Settings::getEchoComments() );
-    this->setCheckedState( Toggles::MINIMIZETOTRAY, Settings::getMinimizeToTray() );
-    this->setCheckedState( Toggles::SAVEWINDOWPOSITIONS, Settings::getSaveWindowPositions() );
-    this->setCheckedState( Toggles::LOGFILES, Settings::getLogFiles() );
-//    this->setCheckedState( Toggles::CHECKFORUPDATES, Settings::getCheckForUpdates() );
-    this->setCheckedState( Toggles::DCBLUECODEDSERNUMS, Settings::getDCBlueCodedSerNums() );
-
-    QString dir{ Settings::getWorldDir() };
+    QString dir{ Settings::getSetting( SKeys::Setting, SSubKeys::WorldDir ).toString() };
     QString rowText{ "World Dir: [ %1 ]" };
-            rowText = rowText.arg( dir );
+    if ( !dir.isEmpty() )
+        rowText = rowText.arg( dir );
+    else
+        rowText = rowText.arg( "" );
 
     ui->settingsView->item( Toggles::WORLDDIR, 0 )->setText( rowText );
     this->setCheckedState( Toggles::WORLDDIR, !dir.isEmpty() );
@@ -63,10 +60,12 @@ void SettingsWidget::setCheckedState(const Toggles& option, const bool& val)
 
     QTableWidgetItem* item = ui->settingsView->item( static_cast<int>( option ), 0 );
     if ( item != nullptr )
-    {
-        ui->settingsView->item(
-                    static_cast<int>( option ), 0 )->setCheckState( state );
-    }
+        ui->settingsView->item( static_cast<int>( option ), 0 )->setCheckState( state );
+}
+
+bool SettingsWidget::getCheckedState(const Toggles& option)
+{
+    return ui->settingsView->item( option, 0 )->checkState() == Qt::Checked;
 }
 
 void SettingsWidget::on_settingsView_itemClicked(QTableWidgetItem* item)
@@ -84,7 +83,12 @@ void SettingsWidget::on_settingsView_itemClicked(QTableWidgetItem* item)
 void SettingsWidget::on_settingsView_doubleClicked(const QModelIndex& index)
 {
     int row = index.row();
+    this->toggleSettingsModel( row );
 
+}
+
+void SettingsWidget::toggleSettingsModel(const qint32 &row)
+{
     Qt::CheckState val = ui->settingsView->item( row, 0 )->checkState();
     ui->settingsView->item( row, 0 )->setCheckState( val == Qt::Checked ? Qt::Unchecked : Qt::Checked );
 
@@ -101,115 +105,58 @@ void SettingsWidget::toggleSettings(const qint32& row, Qt::CheckState value)
 
     switch ( static_cast<Toggles>( row ) )
     {
-        case Toggles::REQPWD: //0
+        case Toggles::ALLOWDUPEDIP: //0
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::AllowDupe );
+            if ( state )
             {
-                QString pwd{ Settings::getPassword() };
-
-                bool reUse{ false };
-                bool ok{ false };
-
-                Settings::setRequirePassword( state );
-                if ( state != pwdCheckState )
-                {
-                    if ( Settings::getRequirePassword() )
-                    {
-                        //Recycyle the Old password. Assuming it wasn't deleted.
-                        if ( !pwd.isEmpty() )
-                        {
-                            title = "Re-Use Password:";
-                            prompt = "Do you wish to re-use the stored Password?";
-
-                            reUse = Helper::confirmAction( this, title, prompt );
-
-                        }
-
-                        if ( pwd.isEmpty()
-                             || !reUse )
-                        {
-                            title = "Server Password:";
-                            prompt = "Password:";
-                            pwd = Helper::getTextResponse( this, title, prompt, "", &ok, 0 );
-                        }
-
-                        if (( !pwd.isEmpty()
-                           && ok )
-                          || reUse )
-                        {
-                            if ( !reUse )
-                                Settings::setPassword( pwd );
-                        }
-                        else
-                        {
-                            ui->settingsView->item( row, 0 )->setCheckState( Qt::Unchecked );
-
-                            state = false;
-                            Settings::setRequirePassword( state );
-                        }
-                    }
-                    else if ( !Settings::getRequirePassword()
-                              && !pwd.isEmpty() )
-                    {
-                        title = "Remove Password:";
-                        prompt = "Do you wish to erase the stored Password?";
-
-                        if ( Helper::confirmAction( this, title, prompt ) )
-                        {
-                            pwd.clear();
-                            Settings::setPassword( pwd );
-                        }
-                    }
-                }
-                pwdCheckState = state;
+                if ( this->getCheckedState( Toggles::BANDUPEDIP ) )
+                    this->toggleSettingsModel( Toggles::BANDUPEDIP );
             }
         break;
-        //case Toggles::REQADMINPWD: //
-        //    Settings::setReqAdminAuth( state );
-        //break;
-        case Toggles::ALLOWDUPEDIP: //1
-            Settings::setAllowDupedIP( state );
-        break;
-        case Toggles::BANDUPEDIP: //2
-            Settings::setBanDupedIP( state );
-        break;
-        //case Toggles::BANHACKERS: //
-        //    Settings::setBanHackers( state );
-        //break;
-        case Toggles::REQSERNUM: //4
-            Settings::setReqSernums( state );
-        break;
-        case Toggles::DCBLUECODEDSERNUMS: //5
-                Settings::setDCBlueCodedSerNums( state );
-        break;
-        case Toggles::DISCONNECTIDLES: //6
-            Settings::setDisconnectIdles( state );
-        break;
-        case Toggles::ALLOWSSV: //7
-            Settings::setAllowSSV( state );
-        break;
-        case Toggles::LOGCOMMENTS: //8
-            Settings::setLogComments( state );
-        break;
-        case Toggles::FWDCOMMENTS: //9
-            Settings::setFwdComments( state );
-        break;
-        case Toggles::ECHOCOMMENTS: //10
-            Settings::setEchoComments( state );
-        break;
-        case Toggles::INFORMADMINLOGIN: //11
-            Settings::setInformAdminLogin( state );
-        break;
-        case Toggles::MINIMIZETOTRAY: //12
-            Settings::setMinimizeToTray( state );
-        break;
-        case Toggles::SAVEWINDOWPOSITIONS: //13
-            Settings::setSaveWindowPositions( state );
-        break;
-        case Toggles::LOGFILES: //14
-            Settings::setLogFiles( state );
-        break;
-        case Toggles::WORLDDIR: //15
+        case Toggles::BANDUPEDIP: //1
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::BanDupes );
+            if ( state )
             {
-                QString directory{ Settings::getWorldDir() };
+                if ( this->getCheckedState( Toggles::ALLOWDUPEDIP ) )
+                    this->toggleSettingsModel( Toggles::ALLOWDUPEDIP );
+            }
+        break;
+        case Toggles::REQSERNUM: //2
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::ReqSerNum );
+        break;
+        case Toggles::DCBLUECODEDSERNUMS: //3
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::DCBlueCodedSerNums );
+        break;
+        case Toggles::DISCONNECTIDLES: //4
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::AllowIdle );
+        break;
+        case Toggles::ALLOWSSV: //5
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::AllowSSV );
+        break;
+        case Toggles::LOGCOMMENTS: //6
+            Settings::setSetting( state, SKeys::Logger, SSubKeys::LogComments );
+        break;
+        case Toggles::FWDCOMMENTS: //7
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::FwdComments );
+        break;
+        case Toggles::ECHOCOMMENTS: //8
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::EchoComments );
+        break;
+        case Toggles::INFORMADMINLOGIN: //9
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::InformAdminLogin );
+        break;
+        case Toggles::MINIMIZETOTRAY: //10
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::MinimizeToTray );
+        break;
+        case Toggles::SAVEWINDOWPOSITIONS: //11
+            Settings::setSetting( state, SKeys::Setting, SSubKeys::SaveWindowPositions );
+        break;
+        case Toggles::LOGFILES: //12
+            Settings::setSetting( state, SKeys::Logger, SSubKeys::LogFiles );
+        break;
+        case Toggles::WORLDDIR: //13
+            {
+                QString directory{ Settings::getSetting( SKeys::Setting, SSubKeys::WorldDir ).toString() };
                 QString rowText{ "World Dir: [ %1 ]" };
 
                 bool reUse{ false };
@@ -248,7 +195,8 @@ void SettingsWidget::toggleSettings(const qint32& row, Qt::CheckState value)
                     }
                     rowText = rowText.arg( directory );
                     ui->settingsView->item( Toggles::WORLDDIR, 0 )->setText( rowText );
-                    Settings::setWorldDir( directory );
+
+                    Settings::setSetting( directory, SKeys::Setting, SSubKeys::WorldDir );
                 }
             }
         break;

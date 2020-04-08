@@ -47,7 +47,6 @@ Server::Server(QWidget* parent, ServerInfo* svr, QStandardItemModel* plrView)
 
     //Connect Objects.
     QObject::connect( pktHandle, &PacketHandler::newUserCommentSignal, serverComments, &Comments::newUserCommentSlot, Qt::QueuedConnection );
-    QObject::connect( this, &QTcpServer::newConnection, this, &Server::newConnectionSlot, Qt::QueuedConnection );
 
     auto* widget = dynamic_cast<ReMixWidget*>( mother );
     QObject::connect( widget, &ReMixWidget::reValidateServerIPSignal, widget,
@@ -72,12 +71,8 @@ Server::Server(QWidget* parent, ServerInfo* svr, QStandardItemModel* plrView)
                     Player* plr = server->getPlayer( i );
                     if ( plr != nullptr )
                     {
-                        QTcpSocket* tmpSoc{ plr->getSocket() };
-                        if ( tmpSoc != nullptr )
-                        {
-                            bOut = tmpSoc->write( msg.toLatin1(), msg.length() );
-                            server->updateBytesOut( plr, bOut );
-                        }
+                        bOut = plr->write( msg.toLatin1(), msg.length() );
+                        server->updateBytesOut( plr, bOut );
                     }
                 }
             }
@@ -109,18 +104,12 @@ void Server::updatePlayerTable(Player* plr, const QHostAddress& peerAddr, const 
     QString ip{ peerAddr.toString() % ":%1" };
             ip = ip.arg( port );
 
-    plr->setPublicIP( peerAddr.toString() );
-    plr->setPublicPort( port );
-
     QByteArray data{ this->getBioHashValue( peerAddr ) };
     if ( data.isEmpty() )
     {
         this->insertBioHash( peerAddr, QByteArray( "No BIO Data Detected. Be wary of this User!" ) );
         data = this->getBioHashValue( peerAddr );
-        plr->setHasBioData( false );
     }
-    else
-        plr->setHasBioData( true );
 
     plr->setBioData( data );
     if ( plrTableItems.contains( ip ) )
@@ -158,33 +147,12 @@ QStandardItem* Server::updatePlayerTableImpl(const QString& peerIP, const QByteA
     if ( !bio.isEmpty() )
     {
         QString sernum = Helper::getStrStr( bio, "sernum", "=", "," );
-        //plr->validateSerNum( plr->getServerInfo(),
-        //                     Helper::serNumToHexStr( sernum )
-        //                                .toUInt( nullptr, 16 ) );
+        QString alias = Helper::getStrStr( bio, "alias", "=", "," );
+        QString age = Helper::getStrStr( bio, "HHMM", "=", "," );
 
         User::updateCallCount( Helper::serNumToHexStr( sernum ) );
-
-        QString alias = Helper::getStrStr( bio, "alias", "=", "," );
-        plr->setAlias( alias );
-
-        QString age = Helper::getStrStr( bio, "HHMM", "=", "," );
         plr->setPlayTime( age );
-
-        qint32 index{ Helper::getStrIndex( bio, "d=" ) };
-        QString dVar{ "" };
-        QString wVar{ "" };
-        if ( index >= 0 )
-        {
-            dVar = bio.mid( index + 2 ).left( 8 );
-            plr->setDVar( dVar );
-        }
-
-        index = Helper::getStrIndex( bio, "w=" );
-        if ( index >= 0 )
-        {
-            wVar = bio.mid( index + 2 ).left( 8 );
-            plr->setWVar( wVar );
-        }
+        plr->setAlias( alias );
 
         plrViewModel->setData( plrViewModel->index( row, 1 ), sernum, Qt::DisplayRole );
         plrViewModel->setData( plrViewModel->index( row, 2 ), age, Qt::DisplayRole );
@@ -212,60 +180,47 @@ void Server::setupServerInfo()
     this->listen( QHostAddress( server->getPrivateIP() ), server->getPrivatePort() );
 }
 
-void Server::newConnectionSlot()
+void Server::incomingConnection(qintptr socketDescriptor)
 {
-    QTcpSocket* peer = this->nextPendingConnection();
     Player* plr{ nullptr };
 
-    if ( peer == nullptr )
-        return;
-
     server->setUserCalls( server->getUserCalls() + 1 );
-    int slot = server->getSocketSlot( peer );
+    int slot = server->getSocketSlot( socketDescriptor );
     if ( slot < 0 )
-        plr = server->createPlayer( server->getEmptySlot() );
+        plr = server->createPlayer( server->getEmptySlot(), socketDescriptor );
     else
         plr = server->getPlayer( slot );
-
-    //We've created a new Player, assign it's Socket.
-    plr->setSocket( peer );
 
     //Set the Player's reference to the ServerInfo class.
     plr->setServerInfo( server );
 
     //Connect the pending Connection to a Disconnected lambda.
-    QObject::connect( peer, &QTcpSocket::disconnected, peer,
+    QObject::connect( plr, &Player::disconnected, plr,
     [=]()
     {
-        this->userDisconnected( peer );
+        this->userDisconnected( plr );
     });
 
     //Connect the pending Connection to a ReadyRead lambda.
-    QObject::connect( peer, &QTcpSocket::readyRead, peer,
+    QObject::connect( plr, &Player::readyRead, plr,
     [=]()
     {
-        this->userReadyRead( peer );
+        this->userReadyRead( plr );
     }, Qt::QueuedConnection );
 
     server->sendServerGreeting( plr );
-    this->updatePlayerTable( plr, peer->peerAddress(), peer->peerPort() );
+    this->updatePlayerTable( plr, plr->peerAddress(), plr->peerPort() );
 }
 
-void Server::userReadyRead(QTcpSocket* socket)
+void Server::userReadyRead(Player* plr)
 {
-    if ( socket == nullptr )
-        return;
-
-    qint32 slot{ server->getSocketSlot( socket ) };
-    Player* plr{ server->getPlayer( slot ) };
-
     if ( plr == nullptr )
         return;
 
     QByteArray data = plr->getOutBuff();
     qint64 bIn = data.length();
 
-    data.append( socket->readAll() );
+    data.append( plr->readAll() );
     server->setBytesIn( server->getBytesIn() + static_cast<quint64>(data.length() - bIn ) );
 
     if ( data.contains( "\r" )
@@ -290,28 +245,22 @@ void Server::userReadyRead(QTcpSocket* socket)
             plr->setBytesIn( plr->getBytesIn() + static_cast<quint64>( packet.length() ) );
 
             pktHandle->parsePacket( packet, plr );
-            if ( socket->bytesAvailable() > 0
+            if ( plr->bytesAvailable() > 0
               || plr->getOutBuff().size() > 0 )
             {
-                emit socket->readyRead();
+                emit plr->readyRead();
             }
         }
     }
 }
 
-void Server::userDisconnected(QTcpSocket* socket)
+void Server::userDisconnected(Player* plr)
 {
-    if ( socket == nullptr )
-        return;
-
-    qint32 slot{ server->getSocketSlot( socket ) };
-    Player* plr{ server->getPlayer( slot ) };
-
     if ( plr == nullptr )
         return;
 
-    QString ip{ socket->peerAddress().toString() % ":%1" };
-            ip = ip.arg( socket->peerPort() );
+    QString ip{ plr->peerAddress().toString() % ":%1" };
+            ip = ip.arg( plr->peerPort() );
 
     QStandardItem* item = plrTableItems.take( ip );
     if ( item != nullptr )
@@ -325,7 +274,7 @@ void Server::userDisconnected(QTcpSocket* socket)
             plrTableItems.insert( ip, item );
     }
 
-    server->deletePlayer( plr->getSlotPos() );
+    server->deletePlayer( plr );
     server->sendMasterInfo();
 }
 

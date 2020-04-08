@@ -5,15 +5,13 @@
 
 //ReMix Widget includes.
 #include "widgets/settingswidget.hpp"
-#include "widgets/motdwidget.hpp"
 #include "widgets/ruleswidget.hpp"
+#include "widgets/motdwidget.hpp"
 
 //ReMix includes.
 #include "serverinfo.hpp"
-#include "settings.hpp"
 #include "randdev.hpp"
 #include "helper.hpp"
-#include "rules.hpp"
 
 //Qt Includes.
 #include <QNetworkAccessManager>
@@ -23,8 +21,8 @@
 #include <QObject>
 #include <QtCore>
 
-//Initialize Settings keys/        subKeys lists
-const QStringList Settings::keys =
+//Initialize Settings keys/subKeys lists
+const QStringList Settings::pKeys =
 {
     "Settings",
     "WrongIPs",
@@ -34,19 +32,17 @@ const QStringList Settings::keys =
     "Logger"
 };
 
-const QStringList Settings::subKeys =
+const QStringList Settings::sKeys =
 {
+    //Settings.
     "serverID",
-    "serverPwd",
     "autoBanish",
     "discIdle",
     "reqSerNums",
     "dupeOK",
     "supportsSSV",
     "banishDupeIP",
-    "reqServerPwd",
     "MOTD",
-    "reqAdminAuth",
     "logComments",
     "fwdComments",
     "informAdminLogin",
@@ -63,7 +59,26 @@ const QStringList Settings::subKeys =
     "useUPNP",
     "checkForUpdates",
     "dcBlueCodedSerNums",
-    "loggerAutoScroll"
+    "loggerAutoScroll",
+
+    //Rules.
+    "hasSvrPassword",
+    "svrPassword",
+    "world",
+    "url",
+    "allPK",
+    "maxP",
+    "maxAFK",
+    "minV",
+    "ladder",
+    "noBleep",
+    "noCheat",
+    "noEavesdrop",
+    "noMigrate",
+    "noMod",
+    "noPets",
+    "noPK",
+    "arenaPK",
 };
 
 //Initialize our QSettings Object globally to make things more responsive.
@@ -92,18 +107,14 @@ Settings::Settings(QWidget* parent) :
         ui->widget->layout()->addWidget( tabWidget );
     }
 
-    if ( this->getSaveWindowPositions() )
-    {
-        QByteArray geometry{ Settings::getWindowPositions( this->metaObject()->className() ) };
-        if ( !geometry.isEmpty() )
-            this->restoreGeometry( Settings::getWindowPositions( this->metaObject()->className() ) );
-    }
+    if ( getSetting( SKeys::Setting, SSubKeys::SaveWindowPositions ).toBool() )
+        this->restoreGeometry( Settings::getSetting( SKeys::Positions, this->metaObject()->className() ).toByteArray() );
 }
 
 Settings::~Settings()
 {
-    if ( this->getSaveWindowPositions() )
-        this->setWindowPositions( this->saveGeometry(), this->metaObject()->className() );
+    if ( getSetting( SKeys::Setting, SSubKeys::SaveWindowPositions ).toBool() )
+        setSetting( this->saveGeometry(), SKeys::Positions, this->metaObject()->className() );
 
     tabWidget->deleteLater();
     settings->deleteLater();
@@ -145,34 +156,62 @@ void Settings::updateTabBar(ServerInfo* server)
 
 void Settings::copyServerSettings(ServerInfo* server, const QString& newName)
 {
-    QMutexLocker locker( &mutex );
+    //QMutexLocker locker( &mutex );
     QString oldName{ server->getServerName() };
+    QVariant val;
     if ( oldName != newName )
     {
         //Copy Rules.
-        Rules::setNoEavesdropping( Rules::getNoEavesdropping( oldName ), newName );
-        Rules::setReportLadder( Rules::getReportLadder( oldName ), newName );
-        Rules::setNoMigrating( Rules::getNoMigrating( oldName ), newName );
-        Rules::setURLAddress( Rules::getURLAddress( oldName ), newName );
-        Rules::setMinVersion( Rules::getMinVersion( oldName ), newName );
-        Rules::setNoCheating( Rules::getNoCheating( oldName ), newName );
-        Rules::setArenaPKing( Rules::getArenaPKing( oldName ), newName );
-        Rules::setMaxPlayers( Rules::getMaxPlayers( oldName ), newName );
-        Rules::setNoCursing( Rules::getNoCursing( oldName ), newName );
-        Rules::setNoModding( Rules::getNoModding( oldName ), newName );
-        Rules::setWorldName( Rules::getWorldName( oldName ),newName );
-        Rules::setAllPKing( Rules::getAllPKing( oldName ), newName );
-        Rules::setNoPKing( Rules::getNoPKing( oldName ), newName );
-        Rules::setMaxAFK( Rules::getMaxAFK( oldName ), newName );
-        Rules::setNoPets( Rules::getNoPets( oldName ), newName );
+        val = getSetting( SKeys::Rules, SSubKeys::HasSvrPassword, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::HasSvrPassword, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::NoEavesdrop, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::NoEavesdrop, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::SvrPassword, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::SvrPassword, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::MinVersion, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::MinVersion, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::MaxPlayers, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::MaxPlayers, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::NoMigrate, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::NoMigrate, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::NoModding, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::NoModding, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::PKLadder, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::PKLadder, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::ArenaPK, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::ArenaPK, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::NoCheat, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::NoCheat, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::NoBleep, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::NoBleep, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::SvrUrl, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::SvrUrl, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::NoPets, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::NoPets, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::MaxAFK, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::MaxAFK, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::World, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::World, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::AllPK, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::AllPK, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::NoPK, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::NoPK, newName );
 
-        //Copy other Settings.
-        setServerRunning( getServerRunning( oldName ), newName );
-        setMOTDMessage( getMOTDMessage( oldName ), newName );
-        setPortNumber( getPortNumber( oldName ).toUShort(), newName );
-        setServerID( getServerID( oldName ).toInt(), newName );
-        setIsPublic( getIsPublic( oldName ), newName );
-        setGameName( getGameName( oldName ), newName );
+        //Copy Settings.
+        val = getSetting( SKeys::Setting, SSubKeys::PortNumber, oldName );
+              setSetting( val, SKeys::Setting, SSubKeys::PortNumber, newName );
+        val = getSetting( SKeys::Setting, SSubKeys::IsRunning, oldName );
+              setSetting( val, SKeys::Setting, SSubKeys::IsRunning, newName );
+        val = getServerID( oldName );
+              setSetting( val, SKeys::Setting, SSubKeys::Extension, newName );
+        val = getSetting( SKeys::Setting, SSubKeys::IsPublic, oldName );
+              setSetting( val, SKeys::Setting, SSubKeys::IsPublic, newName );
+        val = getSetting( SKeys::Setting, SSubKeys::GameName, oldName );
+              setSetting( val, SKeys::Setting, SSubKeys::GameName, newName );
+        val = getSetting( SKeys::Setting, SSubKeys::UseUPNP, oldName );
+              setSetting( val, SKeys::Setting, SSubKeys::UseUPNP, newName );
+        val = getSetting( SKeys::Setting, SSubKeys::MOTD, oldName );
+              setSetting( val, SKeys::Setting, SSubKeys::MOTD, oldName );
 
         prefs->remove( oldName );
         prefs->sync();
@@ -180,390 +219,169 @@ void Settings::copyServerSettings(ServerInfo* server, const QString& newName)
 }
 
 //Static-Free Functions.
-void Settings::setSetting(const QString& key, const QString& subKey, const QVariant& value)
+void Settings::setSettingFromPath(const QString& path, const QVariant& value)
 {
     QMutexLocker locker( &mutex );
-    prefs->setValue( key % "/" % subKey, value );
+    if ( !canRemoveSetting( value ) )
+        prefs->setValue( path, value );
+    else
+        removeSetting( path );
+
     prefs->sync();
 }
 
-QVariant Settings::getSetting(const QString& key, const QString& subKey)
+QVariant Settings::getSettingFromPath(const QString& path)
 {
     QMutexLocker locker( &mutex );
-    return prefs->value( key % "/" % subKey );
-}
-
-void Settings::setServerSetting(const QString& key, const QString& subKey, const QVariant& value, const QString& svrID)
-{
-    QMutexLocker locker( &mutex );
-    prefs->setValue( svrID % "/" % key % "/" % subKey, value );
     prefs->sync();
+    return prefs->value( path );
 }
 
-QVariant Settings::getServerSetting(const QString& key, const QString& subKey, const QString& svrID)
+QString Settings::makeSettingPath(const SKeys& key, const SSubKeys& subKey, const QVariant& childSubKey)
 {
-    QMutexLocker locker( &mutex );
-    return prefs->value( svrID % "/" % key % "/" % subKey );
+    QString path{ "%1/%2/%3" };
+            path = path.arg( childSubKey.toString() )
+                       .arg( Settings::pKeys[ static_cast<int>( key ) ] )
+                       .arg( sKeys[ static_cast<int>( subKey ) ] );
+    return path;
 }
 
-void Settings::setReqAdminAuth(const bool& value)
+QString Settings::makeSettingPath(const SKeys& key, const SSubKeys& subKey)
 {
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::ReqAdminAuth ], value );
+    QString path{ "%1/%2" };
+            path = path.arg( Settings::pKeys[ static_cast<int>( key ) ] )
+                       .arg( sKeys[ static_cast<int>( subKey ) ] );
+    return path;
 }
 
-bool Settings::getReqAdminAuth()
+QString Settings::makeSettingPath(const SKeys& key, const QVariant& subKey)
 {
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::ReqAdminAuth ] )
-              .toBool();
+    QString path{ "%1/%2" };
+            path = path.arg( Settings::pKeys[ static_cast<int>( key ) ] )
+                       .arg( subKey.toString() );
+    return path;
 }
 
-void Settings::setPassword(const QString& value)
+QString Settings::makeRulePath(const QString& serverName, const SSubKeys& key)
 {
-    QString hash{ value };
+    QString path{ "%1/%2/%3" };
+            path = path.arg( serverName )
+                       .arg( pKeys[ static_cast<int>( SKeys::Rules ) ] )
+                       .arg( sKeys[ static_cast<int>( key ) ] );
+    return path;
+}
 
-    //Convert the password to a SHA3_512 hash.
-    if ( !value.isEmpty() )
+bool Settings::canRemoveSetting(const QVariant& value)
+{
+    bool remove{ false };
+    if ( !value.toBool()
+      && ( value.toInt() == 0 )
+      && ( Helper::cmpStrings( "false", value.toString() )
+        || Helper::cmpStrings( "0", value.toString() )
+        || value.toString().isEmpty() ) )
     {
-        hash = Helper::hashPassword( hash );
-        setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::Password ], hash );
+        remove = true;  //Keys with a 'disabled' value will be removed from storage.
     }
+    return remove;
 }
 
-QString Settings::getPassword()
+void Settings::removeSetting(const QString& path)
 {
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::Password ] )
-              .toString();
+    prefs->sync();
+    prefs->remove( path );
 }
 
-void Settings::setRequirePassword(const bool& value)
+void Settings::setSetting(const QVariant& value, const SKeys& key, const SSubKeys& subKey, const QVariant& childSubKey)
 {
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::ReqPassword ], value );
+    setSettingFromPath( makeSettingPath( key, subKey, childSubKey ), value );
 }
 
-bool Settings::getRequirePassword()
+void Settings::setSetting(const QVariant& value, const SKeys& key, const SSubKeys& subKey)
 {
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::ReqPassword ] )
-              .toBool();
+    setSettingFromPath( makeSettingPath( key, subKey ), value );
 }
 
-bool Settings::cmpServerPassword(const QString& value)
+void Settings::setSetting(const QVariant& value, const SKeys& key, const QVariant& subKey)
 {
-    QString hash{ value };
-    if ( !hash.isEmpty() )
-        return ( getPassword() == Helper::hashPassword( hash ) );
-
-    return false;
+    setSettingFromPath( makeSettingPath( key, subKey ), value );
 }
 
-void Settings::setAllowDupedIP(const bool& value)
+QVariant Settings::getSetting(const SKeys& key, const SSubKeys& subKey, const QVariant& childSubKey)
 {
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::AllowDupe ], value );
+    return getSettingFromPath( makeSettingPath( key, subKey, childSubKey ) );
 }
 
-bool Settings::getAllowDupedIP()
+QVariant Settings::getSetting(const SKeys& key, const SSubKeys& subKey)
 {
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::AllowDupe ] )
-              .toBool();
+    return getSettingFromPath( makeSettingPath( key, subKey ) );
 }
 
-void Settings::setBanDupedIP(const bool& value)
+QVariant Settings::getSetting(const SKeys& key, const QString& subKey)
 {
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::BanDupes ], value );
+    return getSettingFromPath( makeSettingPath( key, subKey ) );
 }
 
-bool Settings::getBanDupedIP()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::BanDupes ] )
-              .toBool();
-}
-
-void Settings::setBanHackers(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::AutoBan ], value );
-}
-
-bool Settings::getBanDeviants()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::AutoBan ] )
-              .toBool();
-}
-
-void Settings::setReqSernums(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::ReqSerNum ], value );
-}
-
-bool Settings::getReqSernums()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::ReqSerNum ] )
-              .toBool();
-}
-
-void Settings::setDisconnectIdles(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::AllowIdle ], value );
-}
-
-bool Settings::getDisconnectIdles()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::AllowIdle ] )
-              .toBool();
-}
-
-void Settings::setAllowSSV(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::AllowSSV ], value );
-}
-
-bool Settings::getAllowSSV()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::AllowSSV ] )
-              .toBool();
-}
-
-void Settings::setLogComments(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::LogComments ], value );
-}
-
-bool Settings::getLogComments()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::LogComments ] )
-              .toBool();
-}
-
-void Settings::setLogFiles(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::LogFiles ], value );
-}
-
-bool Settings::getLogFiles()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::LogFiles ] )
-            .toBool();
-}
-
-void Settings::setDarkMode(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::DarkMode ], value );
-}
-
-bool Settings::getDarkMode()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::DarkMode ] )
-            .toBool();
-}
-
-void Settings::setFwdComments(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::FwdComments ], value );
-}
-
-bool Settings::getFwdComments()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::FwdComments ] )
-              .toBool();
-}
-
-void Settings::setInformAdminLogin(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::InformAdminLogin ], value );
-}
-
-bool Settings::getInformAdminLogin()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::InformAdminLogin ] )
-              .toBool();
-}
-
-void Settings::setEchoComments(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::EchoComments ], value );
-}
-
-bool Settings::getEchoComments()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::EchoComments ] )
-              .toBool();
-}
-
-void Settings::setMinimizeToTray(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::MinimizeToTray ], value );
-}
-
-bool Settings::getMinimizeToTray()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::MinimizeToTray ] )
-            .toBool();
-}
-
-void Settings::setSaveWindowPositions(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::SaveWindowPositions ], value );
-}
-
-bool Settings::getSaveWindowPositions()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::SaveWindowPositions ] )
-              .toBool();
-}
-
-void Settings::setCheckForUpdates(const bool& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::CheckForUpdates ], value );
-}
-
-bool Settings::getCheckForUpdates()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::CheckForUpdates ] )
-              .toBool();
-}
-
-void Settings::setDCBlueCodedSerNums(const bool& value)
-{
-
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::DCBlueCodedSerNums ], value );
-}
-
-bool Settings::getDCBlueCodedSerNums()
-{
-
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::DCBlueCodedSerNums ] )
-              .toBool();
-}
-
-void Settings::setWindowPositions(const QByteArray& geometry, const char* dialog)
-{
-    setSetting( keys[ Keys::Positions ], dialog, geometry );
-}
-
-QByteArray Settings::getWindowPositions(const char* dialog)
-{
-    return getSetting( keys[ Keys::Positions ], dialog )
-              .toByteArray();
-}
-
-void Settings::setIsInvalidIPAddress(const QString& value)
-{
-    setSetting( keys[ Keys::WrongIP ], value, true );
-}
-
-bool Settings::getIsInvalidIPAddress(const QString& value)
-{
-    return getSetting( keys[ Keys::WrongIP ], value )
-              .toBool();
-}
-
-void Settings::setMOTDMessage(const QString& value, const QString& svrID)
-{
-    setServerSetting( keys[ Keys::Messages ], subKeys[ SubKeys::MOTD ], value, svrID );
-}
-
-QString Settings::getMOTDMessage(const QString& svrID)
-{
-    return getServerSetting( keys[ Keys::Messages ], subKeys[ SubKeys::MOTD ], svrID )
-                    .toString();
-}
-
-void Settings::setServerID(const qint32& value, const QString& svrID)
-{
-    setServerSetting( keys[ Keys::Setting ], subKeys[ SubKeys::Extension ], value, svrID );
-}
-
+//Retain function for ease of use.
 QString Settings::getServerID(const QString& svrID)
 {
-    qint32 id = getServerSetting( keys[ Keys::Setting ], subKeys[ SubKeys::Extension ], svrID )
-                         .toInt();
+    qint32 id = getSetting( SKeys::Setting, SSubKeys::Extension, svrID ).toInt();
     if ( id <= 0 )
     {
         RandDev* randDev{ RandDev::getDevice() };
         if ( randDev != nullptr )
             id = randDev->genRandNum( 1, 0x7FFFFFFE );
 
-        setServerID( id, svrID );
+        setSetting( id, SKeys::Setting, SSubKeys::Extension, svrID );
 
         delete randDev;
     }
     return Helper::intToStr( id, 16, 8 );
 }
 
-void Settings::setServerRunning(const bool& value, const QString& svrID)
+QString Settings::getRuleSet(const QString& svrID)
 {
     QMutexLocker locker( &mutex );
-    prefs->setValue( svrID % "/" % subKeys[ SubKeys::IsRunning ], value );
     prefs->sync();
+    prefs->beginGroup( svrID % "/" % pKeys[ static_cast<int>( SKeys::Rules ) ] );
+
+    QStringList ruleList{ prefs->allKeys() };
+    QString rules{ "" };
+
+    bool valIsBool{ false };
+
+    QVariant value;
+    for ( const QString& rule : ruleList )
+    {
+        value = prefs->value( rule );
+
+        valIsBool = false;
+
+        if ( Helper::cmpStrings( value.toString(), "true" ) )
+            valIsBool = true;
+
+        if ( !Helper::cmpStrings( rule, "svrPassword" ) )
+        {
+            rules += rule % "=";
+            if ( valIsBool )
+                rules = rules.append( QString::number( value.toBool() ) );
+            else
+                rules = rules.append( value.toString() );
+
+            rules.append( ", " );
+        }
+    }
+
+    prefs->endGroup();
+    return rules;
 }
 
-bool Settings::getServerRunning(const QString& svrID)
+//Retain function for ease of use.
+bool Settings::cmpServerPassword(const QString& serverName, const QString& value)
 {
-    QMutexLocker locker( &mutex );
-    return prefs->value( svrID % "/" % subKeys[ SubKeys::IsRunning ] )
-                    .toBool();
-}
+    QString hash{ value };
+    QVariant val{ getSetting( SKeys::Rules, SSubKeys::SvrPassword, serverName ) };
+    if ( !hash.isEmpty() )
+        return ( val.toString() == Helper::hashPassword( hash ) );
 
-void Settings::setWorldDir(const QString& value)
-{
-    setSetting( keys[ Keys::Setting ], subKeys[ SubKeys::WorldDir ], value );
-}
-
-QString Settings::getWorldDir()
-{
-    return getSetting( keys[ Keys::Setting ], subKeys[ SubKeys::WorldDir ] )
-              .toString();
-}
-
-void Settings::setPortNumber(const quint16& value, const QString& svrID)
-{
-    setServerSetting( keys[ Keys::Setting ], subKeys[ SubKeys::PortNumber ], value, svrID );
-}
-
-QString Settings::getPortNumber(const QString& svrID)
-{
-    return getServerSetting( keys[ Keys::Setting ], subKeys[ SubKeys::PortNumber ], svrID )
-                    .toString();
-}
-
-void Settings::setIsPublic(const bool& value, const QString& svrID)
-{
-    setServerSetting( keys[ Keys::Setting ], subKeys[ SubKeys::IsPublic ], value, svrID );
-}
-
-bool Settings::getIsPublic(const QString& svrID)
-{
-    return getServerSetting( keys[ Keys::Setting ], subKeys[ SubKeys::IsPublic ], svrID )
-            .toBool();
-}
-
-void Settings::setUseUPNP(const bool& value, const QString& svrID)
-{
-    setServerSetting( keys[ Keys::Setting ], subKeys[ SubKeys::UseUPNP ], value, svrID );
-}
-
-bool Settings::getUseUPNP(const QString& svrID)
-{
-    return getServerSetting( keys[ Keys::Setting ], subKeys[ SubKeys::UseUPNP ], svrID )
-                    .toBool();
-}
-
-void Settings::setGameName(const QString& value, const QString& svrID)
-{
-    setServerSetting( keys[ Keys::Setting ], subKeys[ SubKeys::GameName ], value, svrID );
-}
-
-QString Settings::getGameName(const QString& svrID)
-{
-    return getServerSetting( keys[ Keys::Setting ], subKeys[ SubKeys::GameName ], svrID )
-            .toString();
-}
-
-void Settings::setLoggerAutoScroll(const bool& value)
-{
-    setSetting( keys[ Keys::Logger ], subKeys[ SubKeys::LoggerAutoScroll ], value );
-}
-
-bool Settings::getLoggerAutoScroll()
-{
-    return getSetting( keys[ Keys::Logger ], subKeys[ SubKeys::LoggerAutoScroll ] )
-              .toBool();
+    return false;
 }

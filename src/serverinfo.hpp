@@ -9,6 +9,7 @@
 #include <QHostInfo>
 #include <QVariant>
 #include <QObject>
+#include <QMutex>
 #include <QTimer>
 
 class ServerInfo : public QObject
@@ -80,7 +81,6 @@ class ServerInfo : public QObject
     QString info{ "" };
 
     QVector<Player*> players;
-    //Player* players[ MAX_PLAYERS ];
 
     quint32 userCalls{ 0 };
     quint32 userPings{ 0 };
@@ -108,13 +108,13 @@ class ServerInfo : public QObject
         void sendUserList(const QHostAddress& addr, const quint16& port, const quint32& type = 0);
         void sendMasterInfo(const bool& disconnect = false);
 
-        Player* createPlayer(const int& slot);
+        Player* createPlayer(const int& slot, qintptr socketDescriptor);
         Player* getPlayer(const int& slot);
-        void deletePlayer(const int& slot);
+        void deletePlayer(Player* plr);
 
         Player* getLastPlayerInStorage(Player* plr);
         int getEmptySlot();
-        int getSocketSlot(QTcpSocket* soc);
+        int getSocketSlot(qintptr socketDescriptor);
         int getQItemSlot(QStandardItem* index);
 
         void sendPlayerSocketInfo();
@@ -122,7 +122,6 @@ class ServerInfo : public QObject
         void sendServerRules(Player* plr);
         void sendServerGreeting(Player* plr);
         void sendMasterMessage(const QString& packet, Player* plr = nullptr, const bool toAll = false);
-        void sendToAllConnected(const QString& packet);
 
         quint64 getUpTime() const;
         QTimer* getUpTimer();
@@ -272,6 +271,7 @@ class ServerInfo : public QObject
         void serverIDChangedSignal(const QString& serverID);
 
         void insertLogSignal(const QString& source, const QString& message, const LogTypes& type, const bool& logToFile, const bool& newLine) const;
+        void sendMasterMsgToPlayerSignal(Player* plr, const bool& all, const QByteArray& packet);
 
     private slots:
         void udpDataSlot(const QByteArray& data, const QHostAddress& ipAddr, const quint16& port);

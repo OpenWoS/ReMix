@@ -13,7 +13,6 @@
 #include "logger.hpp"
 #include "player.hpp"
 #include "helper.hpp"
-#include "rules.hpp"
 
 //Qt Includes.
 #include <QScrollBar>
@@ -99,25 +98,18 @@ ChatView::ChatView(QWidget* parent, ServerInfo* svr) :
     ui->setupUi(this);
     server = svr;
 
-    //Register the LogTypes type for use within signals and slots.
-    qRegisterMetaType<LogTypes>("LogTypes");
-
     //Connect LogFile Signals to the Logger Class.
     QObject::connect( this, &ChatView::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot, Qt::QueuedConnection );
 
     pktForge = PacketForge::getInstance();
-    if ( Settings::getSaveWindowPositions() )
-    {
-        QByteArray geometry{ Settings::getWindowPositions( this->metaObject()->className() ) };
-        if ( !geometry.isEmpty() )
-            this->restoreGeometry( Settings::getWindowPositions( this->metaObject()->className() ) );
-    }
+    if ( Settings::getSetting( SKeys::Setting, SSubKeys::SaveWindowPositions ).toBool() )
+        this->restoreGeometry( Settings::getSetting( SKeys::Positions, this->metaObject()->className() ).toByteArray() );
 }
 
 ChatView::~ChatView()
 {
-    if ( Settings::getSaveWindowPositions() )
-        Settings::setWindowPositions( this->saveGeometry(), this->metaObject()->className() );
+    if ( Settings::getSetting( SKeys::Setting, SSubKeys::SaveWindowPositions ).toBool() )
+        Settings::setSetting( this->saveGeometry(), SKeys::Positions, this->metaObject()->className() );
 
     delete ui;
 }
@@ -162,8 +154,6 @@ bool ChatView::parsePacket(const QByteArray& packet, Player* plr)
         pkt = pktForge->decryptPacket( packet );
         if ( !pkt.isEmpty() )
         {
-            //WoS and Arcadia both use the opCode 'C' at position '3'
-            //in the packet to denote Chat packets.
 
             //Remove checksum from Arcadia chat packet.
             if ( this->getGameID() == Games::ToY )
@@ -173,9 +163,10 @@ bool ChatView::parsePacket(const QByteArray& packet, Player* plr)
                 pkt = pkt.left( pkt.length() - 4 );
             }
 
+            //WoS and Arcadia both use the opCode 'C' at position '3' in the packet to denote Chat packets.
             if ( pkt.at( 3 ) == 'C' )
             {
-                plr->chatPacketFound();
+                plr->setIsAFK( false );
                 retn = this->parseChatEffect( pkt );
             }
             else if ( pkt.at( 3 ) == '3'
@@ -257,7 +248,7 @@ bool ChatView::parsePacket(const QByteArray& packet, Player* plr)
             this->insertChat( plr->getPlrName() % ": ", Colors::Name, true );
             this->insertChat( pkt, Colors::Chat, false );
 
-            plr->chatPacketFound();
+            plr->setIsAFK( false );
         }
         else if ( pkt.at( 7 ) == '4' )
         {
@@ -317,10 +308,8 @@ bool ChatView::parseChatEffect(const QString& packet)
         //Quick and dirty word replacement.
         if ( server != nullptr )
         {
-            //Check if the bleeping rule is set.
-            //There's no pint in censoring our chat if we aren't censoring chat
-            //for other people.
-            if ( Rules::getNoCursing( server->getServerName() ) )
+            //Check if the bleeping rule is set. There's no pont in censoring our chat if we aren't censoring chat for other people.
+            if ( Settings::getSetting( SKeys::Rules, SSubKeys::NoBleep, server->getServerName() ).toBool() )
                 this->bleepChat( message );
         }
 
@@ -419,13 +408,10 @@ void ChatView::insertChat(const QString& msg, const Colors& color, const bool& n
     }
 
     //Detect when the user is scrolling upwards.
-    if ( obj->verticalScrollBar()->sliderPosition() == curScrlPosMax )
+    if ( obj->verticalScrollBar()->sliderPosition() == curScrlPosMax)
     {
         if ( selStart == 0 && selEnd == 0 )
-        {
-            obj->verticalScrollBar()->setSliderPosition(
-                        obj->verticalScrollBar()->maximum() );
-        }
+            obj->verticalScrollBar()->setSliderPosition( obj->verticalScrollBar()->maximum() );
     }
 }
 

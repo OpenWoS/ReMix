@@ -2,6 +2,49 @@ TODO:
   * Change the IP re-selection to allow the User to select the active network interface and select the working IP address.
   * Implement other remote administrator commands and sub-commands.
 
+Version 2.5.8:
+    Change:
+      * Settings and Rules are now handled via directly accessing the values using the getSetting/getRule functions directly in conjunction with Keys and SubKeys.
+        * The goal of these changes is to reduce the verbosity of the Settings and Rules class files.
+      * Convert the remaining uses of the older style of accessing Settings.
+        * One exemption is related to getting the ServerID. This is remanining in use due to generating the ServerID in place.
+      * Completely merged the Rules Class use cases into the Settings Class.
+      * Comments from Users within the Comments Dialog Window will now be printed more like the Chat View.
+        * The CommentLog no-longer double-prints the timestamp or new (blank) lines.
+      * Add the ability to delete Remix Servers from the CreateInstance Dialog.
+        * Server deletions will be confirmed to prevent accidental deletions.
+      * Unify Master Server Messages to a signal to the Player class.
+        * This reduces the risk of sending a Master Message to a nullptr, and the need to iterate over every Player Object.
+      * ReMix will no longer Parse a User's BIO data for the DVariable, or the WVariable.
+      * When changing a ReMix Server Instance's Name, the Instance will first disconnect from the MasterMix before reconnecting with the new name.
+      * The Player Class now Inherits from the QTcpSocket class.
+        * This allows the Player class to send/recieve packets on it's own without the need for a QTcpSocket variable or checking it's validity.
+
+
+
+    Bugfixes:
+      * Comments are once again only written to disk when the corresponding Setting is toggled on.
+      * Opening a ReMix Instance will no longer overwrite settings if the name of a previous Open Instance is used.
+      * When both "Allow Duplicate IP's" and "Ban Duplicate IP's" enabled, ReMix will only ban a User if "Allow Duplicate IP's" is disabled.
+        * TODO: A more elegant solution is to toggle each setting off when the other is enabled.
+      * The Settings "Allow Duplicate IP's" and "Ban Duplicate IP's" will now toggle eachother off as needed. The previous change is undone.
+        * The Rules "AllPK" and "NoPK" will also toggle eachother off as needed.
+        * The Rules "AllPK" and "ArenaPK" will also toggle eachother off as needed.
+      * Server Passwords are once again correctly checked.
+      * The Rules dialog will now once again properly handle checking and unchecking the "Server password" option.
+      * Revoking a ReMote Administrator who is in a pending state will now properly revoke the rights to register with the server.
+
+
+     
+    Remove:
+      * Some redundant class files.
+      * Files related to the WorldShuffler Class.
+      * Files related to the Rules Class.
+      * Removed unused/commented code from several Class Files.
+
+
+
+
 Version 2.5.7:
     Change:
       * ReMix now properly sends a response when receiving a ":SR?" formatted packet.
@@ -11,7 +54,9 @@ Version 2.5.7:
 	  
 
     Bugfixes:
-
+      * Fixed an issue where the UPNP class would become disconnected from the Logger class.
+        * This issue was preventing the UPNP from inserting logs to the Logger UI and disk.
+      * Fixed a string formatting error in relation to the new Packet Header checks.
 
 
 

@@ -20,7 +20,7 @@ MOTDWidget::MOTDWidget(const QString& name) :
     this->setServerName( name );
 
     //Update the MOTD file after the timer has elapsed.
-    motdUpdate.setInterval( 10000 ); //Update the file after 10seconds.
+    motdUpdate.setInterval( 2000 ); //Update the file after 2seconds.
     motdUpdate.setSingleShot( true );
 
     QObject::connect( &motdUpdate, &QTimer::timeout, &motdUpdate,
@@ -29,7 +29,7 @@ MOTDWidget::MOTDWidget(const QString& name) :
         QString strVar{ ui->motdEdit->toPlainText() };
         Helper::stripNewlines( strVar );
 
-        Settings::setMOTDMessage( strVar, serverName );
+        Settings::setSetting( strVar, SKeys::Setting, SSubKeys::MOTD, serverName );
     }, Qt::QueuedConnection );
 }
 
@@ -61,11 +61,11 @@ void MOTDWidget::deleteWidget(ServerInfo* server)
 
 void MOTDWidget::setServerName(const QString& name)
 {
-    QString text = Settings::getMOTDMessage( name );
+    QString text{ Settings::getSetting( SKeys::Setting, SSubKeys::MOTD, name ).toString() };
     if ( text.isEmpty() )
     {
         text = ui->motdEdit->toPlainText();
-        Settings::setMOTDMessage( text, name );
+        Settings::setSetting( text, SKeys::Setting, SSubKeys::MOTD, name );
     }
     else
         ui->motdEdit->setText( text );

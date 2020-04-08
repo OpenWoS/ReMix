@@ -14,12 +14,12 @@ class SettingsWidget : public QWidget
 {
     Q_OBJECT
 
-    enum Toggles{ REQPWD = 0,/* REQADMINPWD,*/ ALLOWDUPEDIP,
+    enum Toggles{ /*REQPWD = 0, REQADMINPWD,*/ ALLOWDUPEDIP = 0,
                   BANDUPEDIP,/* BANHACKERS,*/ REQSERNUM,
                   DCBLUECODEDSERNUMS, DISCONNECTIDLES, ALLOWSSV,
                   LOGCOMMENTS, FWDCOMMENTS, ECHOCOMMENTS,
                   INFORMADMINLOGIN, MINIMIZETOTRAY,
-                  SAVEWINDOWPOSITIONS, LOGFILES, WORLDDIR = 14, };
+                  SAVEWINDOWPOSITIONS, LOGFILES, WORLDDIR = 13, };
 
     bool pwdCheckState{ false };
 
@@ -28,8 +28,10 @@ class SettingsWidget : public QWidget
         ~SettingsWidget() override;
 
         void setCheckedState(const Toggles& option, const bool& val);
+        bool getCheckedState(const Toggles& option);
 
     private:
+        void toggleSettingsModel(const qint32 &row);
         void toggleSettings(const qint32& row, Qt::CheckState value);
 
     private slots:
