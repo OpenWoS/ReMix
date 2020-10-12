@@ -15,21 +15,23 @@ class RulesWidget : public QWidget
 {
     Q_OBJECT
 
-    enum Toggles{ svrPassword = 0, world = 1, url = 2, allPK = 3, maxP = 4, maxAFK = 5,
-                  minV = 6, ladder = 7, noBleep = 8, noCheat = 9,
-                  noEavesdrop = 10, noMigrate = 11, noMod = 12, noPets = 13,
-                  noPK = 14, arenaPK = 15 };
+    enum Toggles{ svrPassword = 0, autoRestart = 1, world = 2, url = 3, allPK = 4, maxP = 5, maxIdle = 6,
+                  minV = 7, ladder = 8, noBleep = 9, noCheat = 10,
+                  noEavesdrop = 11, noMigrate = 12, noMod = 13, noPets = 14,
+                  noPK = 15, arenaPK = 16 };
 
     static QHash<ServerInfo*, RulesWidget*> ruleWidgets;
 
     SelectWorld* selectWorld{ nullptr };
     bool maxPlayersCheckState{ false };
     bool minVersionCheckState{ false };
-    bool maxAFKCheckState{ false };
+    bool maxIdleCheckState{ false };
     bool worldCheckState{ false };
     bool urlCheckState{ false };
     bool pwdCheckState{ false };
+
     QString serverName{ "" };
+    QString gameInfo{ "" };
 
     public:
         explicit RulesWidget();
@@ -44,6 +46,9 @@ class RulesWidget : public QWidget
 
         void setSelectedWorld(const QString& worldName, const bool& state);
 
+        void setGameInfo(const QString& gInfo);
+        const QString& getGameInfo() const;
+
     private:
         void toggleRulesModel(const qint32& row);
         void toggleRules(const qint32& row, const Qt::CheckState& value);
@@ -54,6 +59,7 @@ class RulesWidget : public QWidget
 
     signals:
         void gameInfoChangedSignal(const QString& gameInfo);
+        void setMaxIdleTimeSignal();
 
     private:
         Ui::RulesWidget* ui;

@@ -19,7 +19,7 @@ PacketForge::~PacketForge() = default;
 PacketForge::PacketForge()
 {
     //Connect LogFile Signals to the Logger Class.
-    QObject::connect( this, &PacketForge::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot, Qt::QueuedConnection );
+    QObject::connect( this, &PacketForge::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot );
 }
 
 PacketForge* PacketForge::getInstance()
@@ -65,7 +65,7 @@ bool PacketForge::validateSerNum(Player* plr, const QByteArray& packet)
     if ( pkt.isEmpty() )
         return true;
 
-    QString srcSerNum = pkt.left( 12 ).mid( 4 );
+    QString srcSerNum{ pkt.left( 12 ).mid( 4 ) };
 
     //Unable to extract a SerNum from the incoming packet, mark as valid.
     if ( srcSerNum.isEmpty() )
@@ -74,7 +74,7 @@ bool PacketForge::validateSerNum(Player* plr, const QByteArray& packet)
     if ( Helper::cmpStrings( srcSerNum, plr->getSernumHex_s() ) )
         return true;
 
-    QString message = "Auto-Mute; SerNum Missmatch; Tried sending a packet as [ %1 ] while connected as [ %2 ].";
+    QString message{ "Auto-Mute; SerNum Missmatch; Tried sending a packet as [ %1 ] while connected as [ %2 ]." };
             message = message.arg( srcSerNum )
                              .arg( plr->getSernum_s() );
     plr->getServerInfo()->sendMasterMessage( message, plr, false );
@@ -82,7 +82,7 @@ bool PacketForge::validateSerNum(Player* plr, const QByteArray& packet)
     QString msg{ "Automatic Network Mute of <[ %1 ][ %2 ]> due to a SerNum Missmatch; Tried sending [ %3 ] as [ %4 ] while connected as [ %5 ]." };
             msg = msg.arg( plr->getSernum_s() )
                      .arg( plr->peerAddress().toString() )
-                     .arg( QString( packet ) )  //Encrypted packet into the log file.
+                     .arg( pkt )  //Encrypted packet into the log file.
                      .arg( srcSerNum )
                      .arg( plr->getSernumHex_s() );
 

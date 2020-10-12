@@ -5,6 +5,7 @@
 
 //ReMix includes.
 #include "packethandler.hpp"
+#include "campexemption.hpp"
 #include "packetforge.hpp"
 #include "serverinfo.hpp"
 #include "cmdhandler.hpp"
@@ -13,6 +14,7 @@
 #include "logger.hpp"
 #include "player.hpp"
 #include "helper.hpp"
+#include "user.hpp"
 
 //Qt Includes.
 #include <QScrollBar>
@@ -99,7 +101,7 @@ ChatView::ChatView(QWidget* parent, ServerInfo* svr) :
     server = svr;
 
     //Connect LogFile Signals to the Logger Class.
-    QObject::connect( this, &ChatView::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot, Qt::QueuedConnection );
+    QObject::connect( this, &ChatView::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot );
 
     pktForge = PacketForge::getInstance();
     if ( Settings::getSetting( SKeys::Setting, SSubKeys::SaveWindowPositions ).toBool() )
@@ -214,20 +216,94 @@ bool ChatView::parsePacket(const QByteArray& packet, Player* plr)
             }
             else if ( this->getGameID() == Games::WoS )
             {
-                //Save the User's camp packet. --Send to newly connecting Users.
-                if ( pkt.at( 3 ) == 'F' )
+                switch ( pkt.at( 3 ).toLatin1() )
                 {
-                    if ( plr->getCampPacket().isEmpty() )
-                    {
-                        qint32 sceneID{ Helper::strToInt( pkt.left( 17 ).mid( 13 ) ) };
-                        if ( sceneID >= 1 ) //If is 0 then it is the well scene and we can ignore the 'camp' packet.
-                            plr->setCampPacket( packet );
-                    }
-                }  //User un-camp. Remove camp packet.
-                else if ( pkt.at( 3 ) == 'f' )
-                {
-                    if ( !plr->getCampPacket().isEmpty() )
-                        plr->setCampPacket( "" );
+                    case 'F':
+                        {  //Save the User's camp packet. --Send to newly connecting Users.
+                            if ( plr->getCampPacket().isEmpty() )
+                            {
+                                qint32 sceneID{ Helper::strToInt( pkt.left( 17 ).mid( 13 ) ) };
+                                if ( sceneID >= 1 ) //If is 0 then it is the well scene and we can ignore the 'camp' packet.
+                                {
+                                    plr->setCampPacket( packet );
+                                    plr->setCampCreatedTime( QDateTime::currentDateTime().toMSecsSinceEpoch() );
+                                }
+                            }
+                        }
+                    break;
+                    case 'f':
+                        {  //User un-camp. Remove camp packet.
+                            if ( !plr->getCampPacket().isEmpty() )
+                            {
+                                plr->setCampPacket( "" );
+                                plr->setCampCreatedTime( 0 );
+                            }
+                        }
+                    break;
+                    case 's': //Parse Player Level and AFK status.
+                        {
+                            plr->setPlrLevel( Helper::strToInt( pkt.mid( 21 ).left( 4 ) ) );
+                            plr->setIsAFK( Helper::strToInt( pkt.mid( 89 ).left( 2 ) ) & 1 );
+                        }
+                    break;
+                    case 'K':  //If pet level exceess the Player's level then discard the packet.
+                        {
+                            QString msg{ "You may not call a pet stronger than yourself within a camp (scene) hosted by another Player!" };
+                            qint32 petLevel{ Helper::strToInt( pkt.mid( 19 ).left( 4 ) ) };
+
+                            if ( plr->getPlrLevel() >= 1
+                              && petLevel >= plr->getPlrLevel() )
+                            {
+                                server->sendMasterMessage( msg, plr, false );
+                                retn = false;
+                            }
+                        }
+                    break;
+                    case 'J':
+                        {
+                            QString trgSerNum{ pkt.left( 21 ).mid( 13 ) };
+                            Player* tmpPlr{ nullptr };
+                            for ( int i = 0; i < MAX_PLAYERS; ++i )
+                            {
+                                tmpPlr = server->getPlayer( i );
+                                if ( tmpPlr != nullptr )
+                                {
+                                    if ( Helper::cmpStrings( tmpPlr->getSernumHex_s(), trgSerNum ) )
+                                        break;
+                                }
+                                tmpPlr = nullptr;
+                            }
+
+                            if ( tmpPlr != nullptr )
+                            {
+                                QString message{ "The Camp Hosted by [ %1 ] is currently locked and you may not enter!" };
+                                if ( !CampExemption::getInstance()->getPlayerExpemption( tmpPlr->getSernumHex_s(), plr->getSernumHex_s() ) )
+                                {   //The Player is not exempted from further checking.
+                                    if ( tmpPlr->getIsCampLocked() )
+                                    {
+                                        retn = false;
+                                    }
+                                    else if ( tmpPlr->getIsCampOptOut() )
+                                    {
+                                        //The Camp was created before the Player connected. Mark it as old.
+                                        if (( tmpPlr->getCampCreatedTime() - plr->getPlrConnectedTime() ) < 0 )
+                                        {
+                                            message = "The Camp Hosted by [ %1 ] is considered \"Old\" to your client and you can not enter!";
+                                            retn = false;
+                                        }
+                                        else
+                                            retn = true;
+                                    }
+                                }
+
+                                if ( !retn )
+                                {
+                                    message = message.arg( tmpPlr->getPlrName() );
+                                    server->sendMasterMessage( message, plr, false );
+                                }
+                            }
+                        }
+                    break;
                 }
             }
         }
@@ -265,10 +341,9 @@ bool ChatView::parseChatEffect(const QString& packet)
 {
     bool retn{ true };
     bool log{ true };
-    QString srcSerNum = packet.left( 12 ).mid( 4 );
-            srcSerNum = Helper::serNumToIntStr( srcSerNum );
+    QString srcSerNum{ Helper::serNumToIntStr( packet.left( 12 ).mid( 4 ), true ) };
+    QString fltrCode{ packet.mid( 13 ).left( 2 ) };
 
-    QString fltrCode = packet.mid( 13 ).left( 2 );
     qint32 code{ (fltrCode.at( 0 ).toLatin1() - 'A') & 0xFF };
     if ( code == 3 || code == 5 || code == 6 || code == 10 )
     {
@@ -340,14 +415,12 @@ bool ChatView::parseChatEffect(const QString& packet)
             break;
             case '`': //Custom command input.
                 {
-                    auto* cHandle{ this->getCmdHandle() };
-                    if ( cHandle != nullptr )
+                    CmdHandler* cHandle{ this->getCmdHandle() };
+                    if ( cHandle != nullptr
+                      && plr != nullptr )
                     {
-                        if ( plr != nullptr )
-                        {
-                            message = message.mid( 1 );
-                            cHandle->parseCommandImpl( plr, message );
-                        }
+                        message = message.mid( 1 );
+                        cHandle->parseCommandImpl( plr, message );
                     }
                     log = false;
                     retn = false;
@@ -371,7 +444,7 @@ bool ChatView::parseChatEffect(const QString& packet)
 
 void ChatView::bleepChat(QString& message)
 {
-    for ( const auto& el : bleepList )
+    for ( const QString& el : bleepList )
     {
         message = message.replace( el, "bleep", Qt::CaseInsensitive );
     }
@@ -380,9 +453,9 @@ void ChatView::bleepChat(QString& message)
 void ChatView::insertChat(const QString& msg, const Colors& color, const bool& newLine)
 {
     QTextEdit* obj{ ui->chatView };
-    int curScrlPosMax = obj->verticalScrollBar()->maximum();
-    int selStart = 0;
-    int selEnd = 0;
+    int curScrlPosMax{ obj->verticalScrollBar()->maximum() };
+    int selStart{ 0 };
+    int selEnd{ 0 };
 
     QTextCursor cursor( obj->textCursor() );
     if ( cursor.hasSelection() )

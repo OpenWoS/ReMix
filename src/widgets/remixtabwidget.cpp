@@ -18,6 +18,7 @@
 
 CreateInstance* ReMixTabWidget::createDialog{ nullptr };
 ReMixTabWidget* ReMixTabWidget::tabInstance{ nullptr };
+
 QMap<int, ReMixWidget*> ReMixTabWidget::serverMap;
 qint32 ReMixTabWidget::instanceCount;
 
@@ -27,20 +28,24 @@ ReMixTabWidget::ReMixTabWidget(QWidget* parent)
     //Allow ServerInstance Tabs to be swapped and moved.
     this->setMovable( true );
 
-    user = User::getInstance();
-    createDialog = this->getCreateDialog( this );
-    QObject::connect( createDialog, &CreateInstance::createServerAcceptedSignal, this, &ReMixTabWidget::createServerAcceptedSlot, Qt::QueuedConnection );
-
+    tabInstance = this;
     this->setTabsClosable( true );
     this->createTabButtons();
 
-    //Initalize the First Server.
-    this->createServer();
+    createDialog = CreateInstance::getInstance( this );
 
-    QObject::connect( this, &QTabWidget::tabCloseRequested, this, &ReMixTabWidget::tabCloseRequestedSlot, Qt::QueuedConnection );
+    QObject::connect( createDialog, &CreateInstance::restartServerListSignal, this, &ReMixTabWidget::restartServerListSlot );
+    QObject::connect( createDialog, &CreateInstance::createServerAcceptedSignal, this, &ReMixTabWidget::createServerAcceptedSlot );
+    createDialog->updateServerList( true );
+
+    //Initalize the First Server. --Only if no stored servers are marked as "AutoRestart"
+    if ( !createDialog->getLoadingOldServers() )
+        this->createServer();
+
+    QObject::connect( this, &QTabWidget::tabCloseRequested, this, &ReMixTabWidget::tabCloseRequestedSlot );
 
     //Hide Tab-specific UI dialog windows when the tabs change.
-    QObject::connect( this, &QTabWidget::currentChanged, this, &ReMixTabWidget::currentChangedSlot, Qt::QueuedConnection );
+    QObject::connect( this, &QTabWidget::currentChanged, this, &ReMixTabWidget::currentChangedSlot );
 
     QObject::connect( this, &QTabWidget::tabBarDoubleClicked, this,
     [=](int index)
@@ -53,7 +58,7 @@ ReMixTabWidget::ReMixTabWidget(QWidget* parent)
             QString message{ "Please enter the new name you wish to use for this server!" };
 
             bool accepted{ false };
-            QString response{ Helper::getTextResponse( this, title, message, tabA->getServerName(), &accepted, 0 ) };
+            QString response{ Helper::getTextResponse( this, title, message, tabA->getServerName(), &accepted, MessageBox::SingleLine ) };
 
             //The User clicked OK. Do nothing if the User clicked Cancel.
             if ( accepted )
@@ -94,7 +99,7 @@ ReMixTabWidget::ReMixTabWidget(QWidget* parent)
                     Helper::warningMessage( this, "Error:", message );
             }
         }
-    }, Qt::QueuedConnection );
+    } );
 
     //Refresh the server instance's ServerID when the Tabs are moved.
     QObject::connect( this->tabBar(), &QTabBar::tabMoved, this->tabBar(),
@@ -108,21 +113,28 @@ ReMixTabWidget::ReMixTabWidget(QWidget* parent)
 
         if ( tabB != nullptr )
             serverMap.insert( from, tabB );
-    }, Qt::QueuedConnection );
+    } );
 }
 
 ReMixTabWidget::~ReMixTabWidget()
 {
+    if ( createDialog != nullptr )
+    {
+        createDialog->deleteLater();
+        createDialog = nullptr;
+    }
+
     nightModeButton->deleteLater();
     newTabButton->deleteLater();
 
-    ReMixWidget* server{ nullptr };
-    for ( int i = 0; i < MAX_SERVER_COUNT; ++i )
+    for ( ReMixWidget* server : serverMap )
     {
-        server = serverMap.value( i );
         if ( server != nullptr )
         {
-            Settings::setSetting( false, SKeys::Setting, SSubKeys::IsRunning, server->getServerName() );
+            //Only Mark Servers as inactive when closing if they aren't tagged for auto-restart.
+            if ( !Settings::getSetting( SKeys::Rules, SSubKeys::AutoRestart, server->getServerName() ).toBool() )
+                Settings::setSetting( false, SKeys::Setting, SSubKeys::IsRunning, server->getServerName() );
+
             server->close();
             server->deleteLater();
         }
@@ -131,10 +143,8 @@ ReMixTabWidget::~ReMixTabWidget()
 
 void ReMixTabWidget::sendMultiServerMessage(const QString& msg)
 {
-    ReMixWidget* server{ nullptr };
-    for ( int i = 0; i < MAX_SERVER_COUNT; ++i )
+    for ( ReMixWidget* server : serverMap )
     {
-        server = serverMap.value( i );
         if ( server != nullptr )
             server->sendServerMessage( msg );
     }
@@ -143,11 +153,8 @@ void ReMixTabWidget::sendMultiServerMessage(const QString& msg)
 quint32 ReMixTabWidget::getPlayerCount() const
 {
     quint32 playerCount{ 0 };
-
-    ReMixWidget* server{ nullptr };
-    for ( int i = 0; i < MAX_SERVER_COUNT; ++i )
+    for ( ReMixWidget* server : serverMap )
     {
-        server = serverMap.value( i );
         if ( server != nullptr )
             playerCount += server->getPlayerCount();
     }
@@ -157,11 +164,8 @@ quint32 ReMixTabWidget::getPlayerCount() const
 quint32 ReMixTabWidget::getServerCount() const
 {
     quint32 serverCount{ 0 };
-
-    ReMixWidget* server{ nullptr };
-    for ( int i = 0; i < MAX_SERVER_COUNT; ++i )
+    for ( ReMixWidget* server : serverMap )
     {
-        server = serverMap.value( i );
         if ( server != nullptr )
             ++serverCount;
     }
@@ -193,15 +197,6 @@ ReMixTabWidget* ReMixTabWidget::getTabInstance(QWidget* parent)
             tabInstance = new ReMixTabWidget();
     }
     return tabInstance;
-}
-
-CreateInstance* ReMixTabWidget::getCreateDialog(QWidget* parent)
-{
-    if ( createDialog == nullptr )
-    {
-        createDialog = new CreateInstance( parent );
-    }
-    return createDialog;
 }
 
 void ReMixTabWidget::remoteCloseServer(ServerInfo* server, const bool restart)
@@ -254,7 +249,7 @@ void ReMixTabWidget::removeServer(const qint32& index, const bool& remote, const
     if ( tabWidget == nullptr )
         return;
 
-    ReMixWidget* instance = serverMap.value( index );
+    ReMixWidget* instance{ serverMap.value( index ) };
     if ( instance == nullptr )
         return;
 
@@ -270,7 +265,9 @@ void ReMixTabWidget::removeServer(const qint32& index, const bool& remote, const
     bool isPublic{ server->getIsPublic() };
     bool useUPNP{ server->getUseUPNP() };
 
-    Settings::setSetting( false, SKeys::Setting, SSubKeys::IsRunning, instance->getServerName() );
+    //Only Mark Servers as inactive when closing if they aren't tagged for auto-restart.
+    if ( !Settings::getSetting( SKeys::Rules, SSubKeys::AutoRestart, server->getServerName() ).toBool() )
+        Settings::setSetting( false, SKeys::Setting, SSubKeys::IsRunning, server->getServerName() );
 
     serverMap.remove( index );
     tabWidget->removeTab( index );
@@ -322,7 +319,7 @@ void ReMixTabWidget::repositionServerIndices()
 {
     //Reposition the server instance's ServerID when Tabs are removed.
     QMap<int, ReMixWidget*> tempMap;
-    for (  auto server : serverMap )
+    for ( ReMixWidget* server : serverMap )
     {
         if ( server != nullptr )
             tempMap.insert( this->indexOf( server ), server );
@@ -340,7 +337,7 @@ void ReMixTabWidget::createTabButtons()
     newTabButton->setAutoRaise( true );
 
     this->setCornerWidget( newTabButton, Qt::TopLeftCorner );
-    QObject::connect( newTabButton, &QToolButton::clicked, this, &ReMixTabWidget::createServer, Qt::QueuedConnection );
+    QObject::connect( newTabButton, &QToolButton::clicked, this, &ReMixTabWidget::createServer );
 
     nightModeButton = new QToolButton( this );
     nightModeButton->setCursor( Qt::ArrowCursor );
@@ -373,14 +370,11 @@ void ReMixTabWidget::createTabButtons()
         Settings::setSetting( type, SKeys::Setting, SSubKeys::DarkMode );
 
         nightMode = !nightMode;
-    }, Qt::QueuedConnection );
+    } );
 }
 
 void ReMixTabWidget::createServer()
 {
-    if ( user == nullptr )
-        return;
-
     if ( createDialog->isVisible() )
         createDialog->hide();
     else
@@ -389,7 +383,7 @@ void ReMixTabWidget::createServer()
 
 void ReMixTabWidget::tabCloseRequestedSlot(const qint32& index)
 {
-    QWidget* widget = this->widget( index );
+    QWidget* widget{ this->widget( index ) };
     if ( widget != nullptr )
     {
         ReMixWidget* instance{ nullptr };
@@ -475,6 +469,30 @@ void ReMixTabWidget::createServerAcceptedSlot(ServerInfo* server)
         serverMap.insert( serverID, new ReMixWidget( this, server ) );
         this->insertTab( serverMap.size() - 1, serverMap.value( serverID ), serverName );
         this->setCurrentIndex( serverID );
+
+        QObject::connect( serverMap.value( serverID ), &ReMixWidget::crossServerCommentSignal, this, &ReMixTabWidget::crossServerCommentSlot );
         Settings::setSetting( server->getIsPublic(), SKeys::Setting, SSubKeys::IsRunning, serverName );
     }
+}
+
+void ReMixTabWidget::restartServerListSlot(const QStringList& restartList)
+{
+    if ( !restartList.isEmpty() )
+    {
+        ServerInfo* server{ nullptr };
+        for ( const QString& name : restartList )
+        {
+            //Only Restart the server if it is enabled for the selected server.
+            if ( Settings::getSetting( SKeys::Rules, SSubKeys::AutoRestart, name ).toBool() )
+            {
+                server = createDialog->loadOldServer( name );
+                this->createServerAcceptedSlot( server );
+            }
+        }
+    }
+}
+
+void ReMixTabWidget::crossServerCommentSlot(ServerInfo* server, const QString& comment)
+{
+    emit this->crossServerCommentSignal( server, comment);
 }

@@ -2,7 +2,6 @@
 #include "ui_logger.h"
 
 //ReMix includes.
-#include "views/loggersortproxymodel.hpp"
 #include "thread/writethread.hpp"
 #include "settings.hpp"
 #include "helper.hpp"
@@ -19,7 +18,6 @@
 #include <QObject>
 #include <QtCore>
 
-LoggerSortProxyModel* Logger::tblProxy{ nullptr };
 QStandardItemModel* Logger::tblModel{ nullptr };
 Logger* Logger::logInstance;
 
@@ -35,6 +33,7 @@ const QStringList Logger::logType =
     "ChatLog",
     "QuestLog",
     "PktForge",
+    "PingLog",
 };
 
 Logger::Logger(QWidget *parent) :
@@ -48,8 +47,8 @@ Logger::Logger(QWidget *parent) :
     writeThread->moveToThread( thread );
 
     //Connect Objects to Slots.
-    QObject::connect( this, &Logger::insertLogSignal, writeThread, &WriteThread::insertLogSlot, Qt::QueuedConnection );
-    QObject::connect( this, &Logger::resizeColumnsSignal, this, &Logger::resizeColumnsSlot, Qt::QueuedConnection );
+    QObject::connect( this, &Logger::insertLogSignal, writeThread, &WriteThread::insertLogSlot );
+    QObject::connect( this, &Logger::resizeColumnsSignal, this, &Logger::resizeColumnsSlot );
 
     tblModel = new QStandardItemModel( 0, 4, nullptr );
     tblModel->setHeaderData( static_cast<int>( LogCols::Message ), Qt::Horizontal, "Message" );
@@ -58,14 +57,9 @@ Logger::Logger(QWidget *parent) :
     tblModel->setHeaderData( static_cast<int>( LogCols::Type ), Qt::Horizontal, "Type" );
 
     ui->logView->setModel( tblModel );
-
-    //Proxy model to support sorting without actually
-    //altering the underlying model
-    tblProxy = new LoggerSortProxyModel();
-    tblProxy->setSortCaseSensitivity( Qt::CaseInsensitive );
-    tblProxy->setDynamicSortFilter( true );
-    tblProxy->setSourceModel( tblModel );
-    ui->logView->setModel( tblProxy );
+    ui->logView->setColumnWidth( static_cast<int>( LogCols::Source ), 150 );
+    ui->logView->setColumnWidth( static_cast<int>( LogCols::Date ), 150 );
+    ui->logView->setColumnWidth( static_cast<int>( LogCols::Type ), 100 );
 
     ui->logView->horizontalHeader()->setStretchLastSection( true );
     ui->logView->horizontalHeader()->setVisible( true );
@@ -98,7 +92,7 @@ Logger::~Logger()
     //Disable Logging Signals.
     this->disconnect();
 
-    QThread* thread = writeThread->thread();
+    QThread* thread{ writeThread->thread() };
     if ( thread != nullptr )
         thread->exit();
 
@@ -108,7 +102,6 @@ Logger::~Logger()
     iconViewerScene->removeItem( iconViewerItem );
     iconViewerScene->deleteLater();
 
-    tblProxy->deleteLater();
     tblModel->deleteLater();
     this->deleteLater();
 
@@ -143,13 +136,13 @@ void Logger::scrollToBottom()
 
 void Logger::insertLog(const QString& source, const QString& message, const LogTypes& type, const bool& logToFile, const bool& newLine)
 {
-    QAbstractItemModel* tblModel = ui->logView->model();
-    QString time = Helper::getTimeAsString();
+    QAbstractItemModel* tblModel{ ui->logView->model() };
+    QString time{ Helper::getTimeAsString() };
 
     if ( tblModel != nullptr
       && ( type != LogTypes::CHAT ) ) //Prevent Chat from appearing within the Logger UI.
     {
-        qint32 row = tblModel->rowCount();
+        qint32 row{ tblModel->rowCount() };
         tblModel->insertRow( row );
         ui->logView->setRowHeight( row, 20 );
 
@@ -158,7 +151,7 @@ void Logger::insertLog(const QString& source, const QString& message, const LogT
         this->updateRowData( row, static_cast<int>( LogCols::Source ), source );
         this->updateRowData( row, static_cast<int>( LogCols::Date ), time );
 
-        ui->logView->resizeColumnsToContents();
+        //ui->logView->resizeColumnsToContents();
         this->scrollToBottom();
     }
 
@@ -168,7 +161,7 @@ void Logger::insertLog(const QString& source, const QString& message, const LogT
 
 void Logger::updateRowData(const qint32& row, const qint32& col, const QVariant& data)
 {
-    QModelIndex index = tblModel->index( row, col );
+    QModelIndex index{ tblModel->index( row, col ) };
     if ( index.isValid() )
     {
         if ( col == static_cast<int>( LogCols::Date ) )
@@ -207,10 +200,10 @@ void Logger::on_autoScroll_clicked()
     Settings::setSetting( ui->autoScroll->isChecked(), SKeys::Logger, SSubKeys::LoggerAutoScroll );
 }
 
-void Logger::resizeColumnsSlot(const LogCols& column)
+void Logger::resizeColumnsSlot(const LogCols&)
 {
     if ( ui == nullptr )
         return;
 
-    ui->logView->resizeColumnToContents( static_cast<int>( column ) );
+    //ui->logView->resizeColumnToContents( static_cast<int>( column ) );
 }

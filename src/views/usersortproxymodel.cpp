@@ -16,11 +16,11 @@ UserSortProxyModel::~UserSortProxyModel() = default;
 
 bool UserSortProxyModel::lessThan(const QModelIndex& left, const QModelIndex& right) const
 {
-    int column = sortColumn();
+    int column{ sortColumn() };
     if ( column >= 0 )
     {
-        QVariant vL = sourceModel()->data( left );
-        QVariant vR = sourceModel()->data( right );
+        QVariant vL{ sourceModel()->data( left ) };
+        QVariant vR{ sourceModel()->data( right ) };
 
         if ( !( vL.isValid() && vR.isValid() ))
             return QSortFilterProxyModel::lessThan( left, right );
@@ -46,20 +46,20 @@ bool UserSortProxyModel::lessThan(const QModelIndex& left, const QModelIndex& ri
         else if ( column == static_cast<int>( UserCols::SerNum ) )
         {
             if ( !vlStr.contains( "SOUL" ) )
-                vlStr = Helper::intSToStr( vlStr, 10 );
+                vlStr = Helper::intSToStr( vlStr, static_cast<int>( IntBase::DEC ) );
             else
                 vlStr = vlStr.remove( "SOUL", Qt::CaseInsensitive ).trimmed();
 
             if ( !vrStr.contains( "SOUL" ) )
-                vrStr = Helper::intSToStr( vrStr, 10 );
+                vrStr = Helper::intSToStr( vrStr, static_cast<int>( IntBase::DEC ) );
             else
                 vrStr = vrStr.remove( "SOUL", Qt::CaseInsensitive ).trimmed();
 
-            vlStr = Helper::intSToStr( vlStr, 10 );
-            vrStr = Helper::intSToStr( vrStr, 10 );
+            vlStr = Helper::intSToStr( vlStr, static_cast<int>( IntBase::DEC ) );
+            vrStr = Helper::intSToStr( vrStr, static_cast<int>( IntBase::DEC ) );
         }
 
-        bool res = false;
+        bool res{ false };
         if ( Helper::naturalSort( vlStr, vrStr, res ) )
             return res;
     }

@@ -7,6 +7,7 @@
 #include "widgets/remixtabwidget.hpp"
 
 //ReMix includes.
+#include "campexemption.hpp"
 #include "serverinfo.hpp"
 #include "settings.hpp"
 #include "logger.hpp"
@@ -67,6 +68,7 @@ ReMix::~ReMix()
     if ( trayMenu != nullptr )
         trayMenu->deleteLater();
 
+    CampExemption::getInstance()->deleteLater();
     Settings::getInstance()->deleteLater();
     Logger::getInstance()->deleteLater();
     User::getInstance()->deleteLater();
@@ -78,6 +80,7 @@ ReMix::~ReMix()
     instance->deleteLater();
 
     Settings::prefs->deleteLater();
+    Settings::bioHash.clear();
     delete ui;
 }
 
@@ -96,7 +99,7 @@ void ReMix::setInstance(ReMix* value)
 
 void ReMix::updateTitleBars(ServerInfo* server)
 {
-    Settings* settings = Settings::getInstance();
+    Settings* settings{ Settings::getInstance() };
     if ( settings != nullptr )
         settings->updateTabBar( server );
 
@@ -122,12 +125,12 @@ void ReMix::initSysTray()
         trayObject = new QSystemTrayIcon( trayIcon, this );
         trayObject->show();
 
-        QAction* minimizeAction = new QAction( "Minimize", this );
-        QAction* restoreAction = new QAction( "Restore", this );
-        QAction* quitAction = new QAction( "Quit", this );
+        QAction* minimizeAction{ new QAction( "Minimize", this ) };
+        QAction* restoreAction{ new QAction( "Restore", this ) };
+        QAction* quitAction{ new QAction( "Quit", this ) };
 
-        QObject::connect( restoreAction, &QAction::triggered, this, &QMainWindow::showNormal, Qt::QueuedConnection );
-        QObject::connect( minimizeAction, &QAction::triggered, this, &QMainWindow::hide, Qt::QueuedConnection );
+        QObject::connect( restoreAction, &QAction::triggered, this, &QMainWindow::showNormal );
+        QObject::connect( minimizeAction, &QAction::triggered, this, &QMainWindow::hide );
 
         QObject::connect( quitAction, &QAction::triggered, quitAction,
         [=]()
@@ -135,7 +138,7 @@ void ReMix::initSysTray()
             //Allow Rejection of a Global CloseEvent.
             if ( !this->rejectCloseEvent() )
                 qApp->quit();
-        }, Qt::QueuedConnection );
+        } );
 
         trayMenu = new QMenu( this );
         trayMenu->addSeparator();

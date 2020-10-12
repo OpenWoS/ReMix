@@ -54,6 +54,7 @@
     class QFileInfo;
     class QSettings;
     class QTextEdit;
+    class QPalette;
     class QLibrary;
     class QToolTip;
     class QVariant;
@@ -81,7 +82,6 @@
     #define REMIX_PROTOTYPES_HPP
 
     //Table-View Classes.
-    class LoggerSortProxyModel;
     class UserSortProxyModel;
     class PlrSortProxyModel;
     class TblEventFilter;
@@ -102,6 +102,7 @@
     class CreateInstance;
     class AppEventFilter;
     class PacketHandler;
+    class CampExemption;
     class SelectWorld;
     class PacketForge;
     class ServerInfo;
@@ -264,10 +265,10 @@
                                 UnBan, Kick, Mute, UnMute, Message, Login,
                                 Register, ShutDown, ReStart, MKAdmin, RMAdmin,
                                 CHAdmin, CHRules, CHSettings, Vanish, Version,
-                                Invalid = -1 };
+                                Camp, Invalid = -1 };
         //Valid Remote Administrator sub-commands.
-        enum class GMSubCmds: int{ One = 0, Two, Three, Four, Five,
-                                   Six, Seven = 6, Invalid = -1 };
+        enum class GMSubCmds: int{ Zero = 0, One, Two, Three, Four, Five,
+                                   Six, Seven = 7, Invalid = -1 };
 
         //Valid Command Structure Format.
         enum class CmdTblFmt: int { Cmd = 0, SubCommands, SubCommandCount,
@@ -300,19 +301,20 @@
                                  BytesIn, BytesOut, BioData = 7, ColCount = 9 };
 
         //Valid columns within the User Dialog.
-        enum class UserCols: int{ SerNum = 0, Pings, Calls, LastSeen, IPAddr,
+        enum class UserCols: int{ SerNum = 0, /*Pings,*/ Calls, LastSeen, IPAddr,
                                   Rank, Muted, MuteDate, MuteDuration,
                                   MuteReason, Banned, BanDate, BanDuration,
-                                  BanReason = 13, ColCount = 14 };
+                                  BanReason = 12, ColCount = 13 };
 
         //Valid columns within the Logger Dialog.
         enum class LogCols: int{ Date = 0, Source, Type, Message = 3, ColCount = 4 };
 
         //Valid Log types available to the Logger Class.
-        enum class LogTypes: int{ ADMIN = 0, COMMENT, USAGE, UPNP, PUNISHMENT, MISC, CHAT, QUEST, PKTFORGE = 8, MAX = 8 };
+        enum class LogTypes: int{ ADMIN = 0, COMMENT, USAGE, UPNP, PUNISHMENT, MISC, CHAT, QUEST, PKTFORGE, PING = 9, MAX = 9 };
 
         //Used for converting time in seconds to a human readable format.
         enum class TimeFormat{ Hours = 0, Minutes = 1, Seconds = 2, Default = -1, HoursDiv = 3600, MinsDiv = 60, SecDiv = 60 };
+        enum class MultiplyTime: int{ Hours = 60, Minutes = 60, Seconds = 60, Miliseconds = 1000 };
 
         //Valid Ban Durations in seconds.
         //1_Day, 7 Days, 30 Days, 6 Months, 1 Year, Permanent
@@ -339,8 +341,14 @@
         enum class SSubKeys: int{ Extension = 0, AutoBan, AllowIdle, ReqSerNum, AllowDupe, AllowSSV, BanDupes, MOTD, LogComments, FwdComments,
                                   InformAdminLogin, EchoComments, MinimizeToTray, SaveWindowPositions, IsRunning, WorldDir, PortNumber, IsPublic,
                                   GameName, LogFiles, DarkMode, UseUPNP, CheckForUpdates, DCBlueCodedSerNums, LoggerAutoScroll, HasSvrPassword,
-                                  SvrPassword, World, SvrUrl, AllPK, MaxPlayers, MaxAFK, MinVersion, PKLadder, NoBleep, NoCheat, NoEavesdrop,
-                                  NoMigrate, NoModding, NoPets, NoPK, ArenaPK, KeyCount };
+                                  SvrPassword, World, SvrUrl, AllPK, MaxPlayers, MaxIdle, MinVersion, PKLadder, NoBleep, NoCheat, NoEavesdrop,
+                                  NoMigrate, NoModding, NoPets, NoPK, ArenaPK, AutoRestart, KeyCount };
+
+        //Valid bases for use in converting strings to integers.
+        enum class IntBase: int{ OCT = 8, DEC = 10, HEX = 16 };
+
+        //Valid MessageBox types.
+        enum class MessageBox: int{ SingleLine = 0, MultiLine = 1, Invalid = -1 };
 
     #endif  // REMIX_GLOBALS
 

@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-Os -s")
 
-set(BUILD_VERSION 2.5.8 CACHE STRING "ReMix version number")
+set(BUILD_VERSION 2.6.7 CACHE STRING "ReMix version number")
 project(ReMix VERSION ${BUILD_VERSION})
 
 set(ReMix_VERSION_2 "v${ReMix_VERSION}")
@@ -24,8 +24,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-set(SOURCES src/views/loggersortproxymodel.cpp
-        src/views/usersortproxymodel.cpp
+set(SOURCES src/views/usersortproxymodel.cpp
         src/views/plrsortproxymodel.cpp
         src/widgets/settingswidget.cpp
         src/widgets/remixtabwidget.cpp
@@ -40,6 +39,7 @@ set(SOURCES src/views/loggersortproxymodel.cpp
         src/createinstance.cpp
         src/appeventfilter.cpp
         src/packethandler.cpp
+        src/campexemption.cpp
         src/packetforge.cpp
         src/selectworld.cpp
         src/cmdhandler.cpp
@@ -60,8 +60,7 @@ set(SOURCES src/views/loggersortproxymodel.cpp
         src/user.cpp
         src/upnp.cpp
         src/main.cpp)
-set(HEADERS src/views/loggersortproxymodel.hpp
-        src/views/usersortproxymodel.hpp
+set(HEADERS src/views/usersortproxymodel.hpp
         src/views/plrsortproxymodel.hpp
         src/widgets/settingswidget.hpp
         src/widgets/remixtabwidget.hpp
@@ -76,6 +75,7 @@ set(HEADERS src/views/loggersortproxymodel.hpp
         src/createinstance.hpp
         src/appeventfilter.hpp
         src/packethandler.hpp
+        src/campexemption.hpp
         src/packetforge.hpp
         src/selectworld.hpp
         src/cmdhandler.hpp

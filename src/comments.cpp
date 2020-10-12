@@ -22,7 +22,7 @@ Comments::Comments(QWidget* parent, ServerInfo* serverInfo) :
     server = serverInfo;
 
     //Connect LogFile Signals to the Logger Class.
-    QObject::connect( this, &Comments::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot, Qt::QueuedConnection );
+    QObject::connect( this, &Comments::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot );
 
     if ( Settings::getSetting( SKeys::Setting, SSubKeys::SaveWindowPositions ).toBool() )
         this->restoreGeometry( Settings::getSetting( SKeys::Positions, this->metaObject()->className() ).toByteArray() );
@@ -44,7 +44,7 @@ void Comments::setTitle(const QString& name)
 
 void Comments::newUserCommentSlot(const QString& sernum, const QString& alias, const QString& message)
 {
-    QTextEdit* obj = ui->msgView;
+    QTextEdit* obj{ ui->msgView };
     if ( obj == nullptr )
         return;
 
@@ -54,6 +54,7 @@ void Comments::newUserCommentSlot(const QString& sernum, const QString& alias, c
             comment = comment.arg( alias )
                              .arg( sernum )
                              .arg( message );
+    QString time{ "[ " % Helper::getTimeAsString( date ) % " ] " };
 
     int curScrlPosMax = obj->verticalScrollBar()->maximum();
     int selStart{ 0 };
@@ -66,7 +67,7 @@ void Comments::newUserCommentSlot(const QString& sernum, const QString& alias, c
         selEnd = cursor.selectionEnd();
     }
     cursor.movePosition( QTextCursor::End );
-    cursor.insertText( "[ " % Helper::getTimeAsString( date ) % " ] " % comment );
+    cursor.insertText( time % comment );
 
     if ( selStart && selEnd )
     {
@@ -83,6 +84,7 @@ void Comments::newUserCommentSlot(const QString& sernum, const QString& alias, c
     if ( Settings::getSetting( SKeys::Logger, SSubKeys::LogComments ).toBool() )
         emit this->insertLogSignal( server->getServerName(), comment, LogTypes::COMMENT, true, false );
 
+    emit this->newUserCommentSignal( comment.simplified() );
     //Show the Dialog when a new comment is received.
     if ( !this->isVisible() )
         this->show();

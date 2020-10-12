@@ -20,6 +20,8 @@ class Helper
         {
             QString str{ "%1" };
                     str = str.arg( val, fill, base, filler ).toUpper();
+            if ( str.length() > 8 )
+                str = str.mid( str.length() - 8 );
             return str;
         }
         static qint32 strToInt(const QString& str, const int& base = 16);
@@ -27,17 +29,18 @@ class Helper
         static QString getStrStr(const QString& str, const QString& indStr, const QString& mid, const QString& left);
 
         static void stripNewlines(QString& string);
-        static void stripSerNumHeader(QString& sernum);
+        static QString stripSerNumHeader(const QString& sernum);
         static QString sanitizeSerNum(const QString& value);
         static QString serNumToHexStr(QString sernum, int fillAmt = 8);
-        static QString serNumToIntStr(const QString& sernum);
-        static qint32 serNumtoInt(QString& sernum);
+        static QString serNumToIntStr(const QString& sernum, const bool& isHex = false);
+        static qint32 serNumtoInt(const QString& sernum, const bool& isHex = false);
 
-        static bool isBlueCodedSerNum(const quint32& sernum);
+        static bool isBlueCodedSerNum(const qint32& sernum);
 
         static bool confirmAction(QWidget* parent, QString& title, QString& prompt);
         static qint32 warningMessage(QWidget* parent, const QString& title, const QString& prompt);
-        static QString getTextResponse(QWidget* parent, const QString& title, const QString& prompt, const QString& defaultInput, bool* ok, int type = 0);
+        static QString getTextResponse(QWidget* parent, const QString& title, const QString& prompt, const QString& defaultInput, bool* ok,
+                                       const MessageBox& type);
 
         static QString getDisconnectReason(QWidget* parent = nullptr);
 
@@ -57,8 +60,8 @@ class Helper
         static bool cmpStrings(const QString& strA, const QString& strB );
         static qint32 getStrIndex(const QString& strA, const QString& strB);
         static QString getTimeAsString(const quint64& time = 0);
-        static QString getTimeFormat(const quint64 &time);
-        static quint64 getTimeIntFormat(const quint64 &time, const TimeFormat& format);
+        static QString getTimeFormat(const qint64& time);
+        static qint64 getTimeIntFormat(const qint64& time, const TimeFormat& format);
 };
 
 #endif // PREFERENCES_HPP

@@ -68,7 +68,7 @@ const QStringList Settings::sKeys =
     "url",
     "allPK",
     "maxP",
-    "maxAFK",
+    "maxIdle",
     "minV",
     "ladder",
     "noBleep",
@@ -79,7 +79,11 @@ const QStringList Settings::sKeys =
     "noPets",
     "noPK",
     "arenaPK",
+    "autoRestart",
 };
+
+//The BIO Hash is accessible via any ReMix Server Instance.
+QHash<QHostAddress, QByteArray> Settings::bioHash;
 
 //Initialize our QSettings Object globally to make things more responsive.
 QSettings* Settings::prefs{ new QSettings( "preferences.ini", QSettings::IniFormat ) };
@@ -121,6 +125,9 @@ Settings::~Settings()
 
     instance->close();
     instance->deleteLater();
+
+    prefs->sync();
+    prefs->deleteLater();
 
     delete ui;
 }
@@ -168,6 +175,8 @@ void Settings::copyServerSettings(ServerInfo* server, const QString& newName)
               setSetting( val, SKeys::Rules, SSubKeys::NoEavesdrop, newName );
         val = getSetting( SKeys::Rules, SSubKeys::SvrPassword, oldName );
               setSetting( val, SKeys::Rules, SSubKeys::SvrPassword, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::AutoRestart, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::AutoRestart, newName );
         val = getSetting( SKeys::Rules, SSubKeys::MinVersion, oldName );
               setSetting( val, SKeys::Rules, SSubKeys::MinVersion, newName );
         val = getSetting( SKeys::Rules, SSubKeys::MaxPlayers, oldName );
@@ -188,8 +197,8 @@ void Settings::copyServerSettings(ServerInfo* server, const QString& newName)
               setSetting( val, SKeys::Rules, SSubKeys::SvrUrl, newName );
         val = getSetting( SKeys::Rules, SSubKeys::NoPets, oldName );
               setSetting( val, SKeys::Rules, SSubKeys::NoPets, newName );
-        val = getSetting( SKeys::Rules, SSubKeys::MaxAFK, oldName );
-              setSetting( val, SKeys::Rules, SSubKeys::MaxAFK, newName );
+        val = getSetting( SKeys::Rules, SSubKeys::MaxIdle, oldName );
+              setSetting( val, SKeys::Rules, SSubKeys::MaxIdle, newName );
         val = getSetting( SKeys::Rules, SSubKeys::World, oldName );
               setSetting( val, SKeys::Rules, SSubKeys::World, newName );
         val = getSetting( SKeys::Rules, SSubKeys::AllPK, oldName );
@@ -239,6 +248,7 @@ QVariant Settings::getSettingFromPath(const QString& path)
 
 QString Settings::makeSettingPath(const SKeys& key, const SSubKeys& subKey, const QVariant& childSubKey)
 {
+    QMutexLocker locker( &mutex );
     QString path{ "%1/%2/%3" };
             path = path.arg( childSubKey.toString() )
                        .arg( Settings::pKeys[ static_cast<int>( key ) ] )
@@ -248,6 +258,7 @@ QString Settings::makeSettingPath(const SKeys& key, const SSubKeys& subKey, cons
 
 QString Settings::makeSettingPath(const SKeys& key, const SSubKeys& subKey)
 {
+    QMutexLocker locker( &mutex );
     QString path{ "%1/%2" };
             path = path.arg( Settings::pKeys[ static_cast<int>( key ) ] )
                        .arg( sKeys[ static_cast<int>( subKey ) ] );
@@ -256,18 +267,10 @@ QString Settings::makeSettingPath(const SKeys& key, const SSubKeys& subKey)
 
 QString Settings::makeSettingPath(const SKeys& key, const QVariant& subKey)
 {
+    QMutexLocker locker( &mutex );
     QString path{ "%1/%2" };
             path = path.arg( Settings::pKeys[ static_cast<int>( key ) ] )
                        .arg( subKey.toString() );
-    return path;
-}
-
-QString Settings::makeRulePath(const QString& serverName, const SSubKeys& key)
-{
-    QString path{ "%1/%2/%3" };
-            path = path.arg( serverName )
-                       .arg( pKeys[ static_cast<int>( SKeys::Rules ) ] )
-                       .arg( sKeys[ static_cast<int>( key ) ] );
     return path;
 }
 
@@ -324,7 +327,7 @@ QVariant Settings::getSetting(const SKeys& key, const QString& subKey)
 //Retain function for ease of use.
 QString Settings::getServerID(const QString& svrID)
 {
-    qint32 id = getSetting( SKeys::Setting, SSubKeys::Extension, svrID ).toInt();
+    qint32 id{ getSetting( SKeys::Setting, SSubKeys::Extension, svrID ).toInt() };
     if ( id <= 0 )
     {
         RandDev* randDev{ RandDev::getDevice() };
@@ -332,10 +335,9 @@ QString Settings::getServerID(const QString& svrID)
             id = randDev->genRandNum( 1, 0x7FFFFFFE );
 
         setSetting( id, SKeys::Setting, SSubKeys::Extension, svrID );
-
-        delete randDev;
+        randDev = nullptr;
     }
-    return Helper::intToStr( id, 16, 8 );
+    return Helper::intToStr( id, static_cast<int>( IntBase::HEX ), 8 );
 }
 
 QString Settings::getRuleSet(const QString& svrID)
@@ -384,4 +386,19 @@ bool Settings::cmpServerPassword(const QString& serverName, const QString& value
         return ( val.toString() == Helper::hashPassword( hash ) );
 
     return false;
+}
+
+void Settings::insertBioHash(const QHostAddress& addr, const QByteArray& value)
+{
+    bioHash.insert( addr, value );
+}
+
+QByteArray Settings::getBioHashValue(const QHostAddress& addr)
+{
+    return bioHash.value( addr );
+}
+
+QHostAddress Settings::getBioHashKey(const QByteArray& bio)
+{
+    return bioHash.key( bio );
 }

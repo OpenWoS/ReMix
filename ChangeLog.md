@@ -2,6 +2,206 @@ TODO:
   * Change the IP re-selection to allow the User to select the active network interface and select the working IP address.
   * Implement other remote administrator commands and sub-commands.
 
+
+Version 2.6.8:
+    Change:
+      * 
+
+
+
+    Bugfixes:
+      * Fixed the issue of having the Create Instance dialog remaining open when auto-restarting server instances.
+
+
+
+
+Version 2.6.7:
+    Change:
+      * Added a new Rule within the Settings/Rules dialog "Auto Restart" to enable ReMix to automatically restart a server when re-opening ReMix.
+        * Known issue: The Create Instance Dialog will also open, and if the host has no other servers to run, must be closed manually.
+      * Consolidated code related to initializing a ReMix instance to make it easier to understand.
+
+
+
+    Bugfixes:
+      * 
+
+
+
+
+Version 2.6.6:
+    Change:
+      * Added a new Log File "PingLog" which will now log pings from Users.
+        * Previously these were written to the "UsageLog".
+        * TODO: Implement a method to hide certain log types from the Log Viewer.
+      * Reduced usages of "magic" numbers in relation to converting strings to integers.
+        * An enum encompassing the various valid formats within Qt has been added.
+
+
+
+    Bugfixes:
+      * Fixed an issue where ReMix could show Users as having connected for longer than the a Server Instance has been online.
+      * Fixed an issue where a ping response was listed within the Log Viewer before the actual ping itself.
+      * Fixed an issue where Players could connect using negative sernums.
+        * Players connecting with a negative sernum will be disconnected as though they were a BlueCoded SerNum, regardless if the Host has enabled the setting.
+
+
+
+
+Version 2.6.5:
+    Change:
+      * Comments to a Server Instance will now be echoed to all admins on all initialized Server Instances.
+        * The setting "Echo Comments to Admins" must be enabled.
+      * ReMix no longer tracks a User's Ping count.
+      * User-list request responses are now omitted from the Log View if the Server has no connected Users.
+      * The command "/info" will now only count Users as Admins if the Admin has logged in with a password.
+        * Previously all Admins were counted regardless of login state.
+
+
+
+    Bugfixes:
+      * Negative SerNums are now correctly handled.
+      * The commands: "/kick", "/ban", and "/mute" can now be used with the "all" sub-command if no message has been provided. e.g. "/ban all"
+      * Commands using the sub-command "all" will no-longer spam the command isser with failures due to tank or User statuses.
+      * Pets of the same level as a Player can no longer be called within another Player's camp (scene).
+      * Fixed a crash related to the "/camp allow" sub-command.
+        * If a User were to omit the soul-targeting (/camp allow soul 4000) command the command would fallthrough and access an invalid nullptr.
+
+
+
+
+Version 2.6.4:
+    Change:
+      * Convert variable initializers to be C++11 brace initializers to be more consitent with newer code.
+      * Reduced the usage of auto casted variables when the type is known within source.
+      * Removed a few unused source files from the repository.
+
+
+
+    Bugfixes:
+      * Finalized fixes related to the improper conversion of SerNums from hex to dec.
+
+
+
+
+Version 2.6.3:
+    Change:
+      * ReMix now checks the 'K' and 's' packet for Pet and Player levels. We also parse the Player's AFK status, but it is not meaningfully used.
+        * If calling a pet into another Player's scene then we check these two levels and confirm that the Pet can be called by the Player.
+        * If the pet is a higher level than the Player then we drop the packet and inform the Player that the pet cannot be called.
+
+
+
+    Bugfixes:
+      * Fixed an issue where GS sernums were being read as white souls.
+      * Properly clean up the CampExemption object when closing ReMix.
+
+
+
+
+Version 2.6.2:
+    Change:
+      * Implemented the ability for Users with the Remote Administrator rank Admin or above to alter a Player's camp(scene) status. Whether locked or allowing only current Players.
+        * These features can be used by appending "soul *PlayerSerNum" to the normal sub-command. e.g. "/camp lock soul 4000".
+        * As ReMix does not supprt sub-sub commands, this command does not appear within the output generated via "/list".
+      * Implemented the ability for Players to individually allow specific Users to bypass a camp(scene)'s locked status.
+        * This is done via the sub-command "allow", and the appended sub-command "soul". e.g. "/camp allow soul 4000".
+          * Players are added to an exemption list which is saved to disk.
+          * The command "allow" currently acts as a toggle, and allowing a previously exempted Player will remove them from the exemption list.
+        * As noted previously, the "soul" command does not appear within the output generated via "/list" for the "/camp" command.
+        * An example of the "/list" output: camp[ lock, unlock, onlycurrent, allownew, allow,  ], 
+        
+
+
+
+
+Version 2.6.1:
+    Bugfixes:
+      * The method for preventing new Players from entering old camps(scenes) should now correctly function and should allow Players to enter camps(scenes) that are set to the "allow all"/default status.
+
+
+
+
+Version 2.6.0:
+    Change:
+      * Implemented the chat command "/camp" with 4 sub-commands; "lock", "unlock", "onlycurrent", and "allownew".
+        * Using "/camp" without any subcommands will issue the Player their current camp(scene) settings.
+        * "lock" Prevents all other Players from entering any scene(camp) hosted by the command issuer.
+        * "unlock" Returns the camp(scene) to default functionality. 
+          * Unless "onlycurrent" is toggled on.
+        * "onlycurrent" Makes it so only Players online when the command issuers scene(camp) was created can enter.
+          * This is an opt-out function and is not the default.
+        * "allowall" Allows Players to enter a camp(scene) hosted by the command issuer. This is regardless of connection or camp(scene) creation time.
+          * Unless "lock" is toggled on.
+      * The locked state issued via the command "/camp lock" is not saved to the Player's data on disk and will only persist while the Player remains connected.
+        * The "onlycurrent" and "allowall" states are however saved to disk and will persist permanently until changed by the Player.
+
+
+
+    Compatibility:
+      * The server rule "maxAFK" has been renamed to "maxIdle" thus compatibility with the old Rule is broken, and Server Hosts will need to re-set this rule if it was in use.
+
+
+
+
+Version 2.5.11:
+    Bugfixes:
+      * Fixed an issue related to disconnecting idle users.
+      * Idle duration is now correctly applied to all Player objects if changed after server initialization.
+        * When showing the default Idle Duration, the Rule will remain un-checked.
+      * The Rules Widget now reflects the default Idle Duration when the Host has not changed it.
+        * This duration is only enforced when the Host has also enabled the Setting "Disconnect Idle Users".
+      * UI Elements related to the Max Idle duration have been renamed to more correctly show their intended purpose.
+        * Previously within the Rules Widget it was referred to as a "Max AFK Duration".
+
+
+
+
+Version 2.5.10:
+    Change:
+      * ReMix will now attempt to re-fetch the 'synreal.ini' file every 24 hours down from previously 48 hours.
+      * ReMix no longer parses any packets for Users within a Muted state.
+      * Users in a disconnected state will no longer be parsed as a valid User from the Players Vector.
+
+
+
+    Bugfixes:
+      * ReMix will no longer Echo comments from Users to ReMote Administrators when comments are being forwarded to all Remote Administrators.
+        * This is to prevent the same message from being sent to the originating User\Remote Administrator twice.
+      * Attempt to prevent the 'synreal.ini' file from being created in a 'null' or empty state.
+        * ReMix will now also properly re-initialize itself with any newly fetched information contained within the 'synreal.ini' file.
+      * Reduce UI 'lag' in relation to resizing UI columns.
+      * Player Objects will now correctly be placed in a disconnected state when the TcpSocket signals that it is disconnecting.
+
+
+
+
+Version 2.5.9:
+    Change:
+      * The Server Class now only handles receiving a socketdescriptor and forwarding it to the ReMixWidget Class.
+      * The Settings class now controls the plrBioHash.
+      * The Player Class now handles it's own readyRead signal/slot, and emits incoming packets to the PacketHandler Class.
+      * The ServerInfo class should now interact with the UPNP class much better to allow forwarding ports before checking in with the MixMaster.
+
+
+
+    Bugfixes:
+      * Added a few QMutexLockers within the Settings Class to prevent possible threading issues from reading rules/settings.
+      * A ReMix Server's GameInfo string will once again be obtained from the RulesWidget Class and appended to any Ping Response.
+      * Fixed a crash related to creating a Server Instance.
+        * The crash was caused by deleting a (global) RandDev Object from within the Settings Class.
+      * Fixed an issue when closing a ReMix Instance.
+        * Instances would close far too fast to properly inform the MasterMix that it had indeed closed.
+        * This issue is most apparent when closing a large number of servers at once.
+      * ReMix will now warn the host when they have reached the maxiumum server count.
+        * In the case that the Server Count has been reached, no Server Instance will be created.
+        * Previously the Server Instance was created, and active without being appended to the ReMixTabWidget UI.
+          * If a User were to attempt to create another Server Instance with ReMix in this state, the MasterMix would ban the User.
+      * Fixed a possible crash related to not properly deleting the UdpThread Objects stored within the ServerInfo Class.
+
+
+
+
 Version 2.5.8:
     Change:
       * Settings and Rules are now handled via directly accessing the values using the getSetting/getRule functions directly in conjunction with Keys and SubKeys.

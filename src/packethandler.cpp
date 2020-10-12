@@ -27,10 +27,10 @@ PacketHandler::PacketHandler(ServerInfo* svr, ChatView* chat)
 
     cmdHandle = new CmdHandler( this, server );
     chatView->setCmdHandle( cmdHandle );
-    QObject::connect( cmdHandle, &CmdHandler::newUserCommentSignal, this, &PacketHandler::newUserCommentSignal, Qt::QueuedConnection );
+    QObject::connect( cmdHandle, &CmdHandler::newUserCommentSignal, this, &PacketHandler::newUserCommentSignal );
 
     //Connect LogFile Signals to the Logger Class.
-    QObject::connect( this, &PacketHandler::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot, Qt::QueuedConnection );
+    QObject::connect( this, &PacketHandler::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot );
 }
 
 PacketHandler::~PacketHandler()
@@ -38,13 +38,18 @@ PacketHandler::~PacketHandler()
     cmdHandle->deleteLater();
 }
 
-void PacketHandler::parsePacket(const QByteArray& packet, Player* plr)
+void PacketHandler::parsePacketSlot(const QByteArray& packet, Player* plr)
 {
+    //Do not parse packets from Muted or Null Users.
+    if ( plr == nullptr
+      || plr->getIsMuted() )
+    {
+        return;
+    }
+
     QByteArray pkt{ packet };
     QChar opCode{ pkt.at( 4 ) };
     QString data{ pkt };
-    if ( plr == nullptr )
-        return;
 
     this->detectFlooding( plr );
 
@@ -98,7 +103,8 @@ void PacketHandler::parsePacket(const QByteArray& packet, Player* plr)
         else if ( Helper::strStartsWithStr( pkt, ":SR?" ) ) //User is requesting Slot information for their packet headers.
         {
             QString sernum{ packet.mid( 4 ).left( 8 ) };
-            plr->validateSerNum( server, sernum.toUInt( nullptr, 16 ) );
+
+            plr->validateSerNum( server, Helper::serNumtoInt( sernum, true ) );
             server->sendPlayerSocketPosition( plr );
             return; //No need to continue parsing. Return now.
         }
@@ -264,11 +270,11 @@ void PacketHandler::parseUDPPacket(const QByteArray& udp, const QHostAddress& ip
                 QString msg{ "Recieved ping from User [ %1:%2 ] with SoulID [ %3 ] and BIO data; %4" };
                         msg = msg.arg( ipAddr.toString() )
                                  .arg( port )
-                                 .arg( Helper::serNumToIntStr( sernum ) )
+                                 .arg( Helper::serNumToIntStr( sernum, true ) )
                                  .arg( data );
-                emit this->insertLogSignal( server->getServerName(), msg, LogTypes::USAGE, true, true );
+                emit this->insertLogSignal( server->getServerName(), msg, LogTypes::PING, true, true );
 
-                Server::insertBioHash( ipAddr, udp.mid( 1 ) );
+                Settings::insertBioHash( ipAddr, udp.mid( 1 ) );
                 User::logBIO( sernum, ipAddr, data );
             }
             break;      //Q and R packet types are handled within the UdpThread class.
@@ -323,8 +329,8 @@ bool PacketHandler::checkBannedInfo(Player* plr) const
             if ( tmpPlr != nullptr
               && tmpPlr != plr )
             {
-                if ( ( tmpPlr->peerAddress().toString() == plr->peerAddress().toString() )
-                  && ( !tmpPlr->getIsDisconnected() || !plr->getIsDisconnected() ) )
+                if ( tmpPlr->peerAddress().toString() == plr->peerAddress().toString()
+                  && !plr->getIsDisconnected() )
                 {
                     auto disconnect = [=]( Player* plr, const QString& logMsg,
                                            QString& plrMessage )
@@ -378,8 +384,8 @@ bool PacketHandler::checkBannedInfo(Player* plr) const
             if ( ( tmpPlr != nullptr )
               && ( tmpPlr->getSernum_i() == plr->getSernum_i() ) )
             {
-                if ( ( tmpPlr != plr )
-                     && !plr->getIsDisconnected() )
+                if ( tmpPlr != plr
+                  && !plr->getIsDisconnected() )
                 {
                     reason = logMsg;
                     reason = reason.arg( "Duplicate SerNum" )
@@ -416,10 +422,10 @@ void PacketHandler::detectFlooding(Player* plr)
     if ( plr == nullptr )
         return;
 
-    int floodCount = plr->getPacketFloodCount();
+    int floodCount{ plr->getPacketFloodCount() };
     if ( floodCount >= 1 )
     {
-        qint64 time = plr->getFloodTime();
+        qint64 time{ plr->getFloodTime() };
         if ( time <= PACKET_FLOOD_TIME )
         {
             if ( floodCount >= PACKET_FLOOD_LIMIT
@@ -451,11 +457,11 @@ bool PacketHandler::validatePacketHeader(Player* plr, const QByteArray& pkt)
     QString msg{ "Auto-Disconnect; Received Packet with Header [ :SR1%1 ] while assigned [ :SR1%2 ]." };
 
     QString recvSlotPos{ pkt.mid( 4 ).left( 2 ) };
-    qint32 plrPktSlot = plr->getPktHeaderSlot();
-    if ( plrPktSlot != Helper::strToInt( recvSlotPos, 16 ) )
+    qint32 plrPktSlot{ plr->getPktHeaderSlot() };
+    if ( plrPktSlot != Helper::strToInt( recvSlotPos, static_cast<int>( IntBase::HEX ) ) )
     {
         msg = msg.arg( recvSlotPos )
-                 .arg( Helper::intToStr( plrPktSlot, 16, 2 ) );
+                 .arg( Helper::intToStr( plrPktSlot, static_cast<int>( IntBase::HEX ), 2 ) );
     }
     else //Slot Matched. Return true;
         return true;
@@ -467,7 +473,7 @@ bool PacketHandler::validatePacketHeader(Player* plr, const QByteArray& pkt)
             logMsg = logMsg.arg( plr->getSernum_s() )
                            .arg( recvSlotPos )
                            .arg( QString( pkt ) )
-                           .arg( Helper::intToStr( plrPktSlot, 16, 2 ) );
+                           .arg( Helper::intToStr( plrPktSlot, static_cast<int>( IntBase::HEX ), 2 ) );
     emit this->insertLogSignal( server->getServerName(), logMsg, LogTypes::PUNISHMENT, true, true );
 
     plr->setDisconnected( true, DCTypes::PktDC );
@@ -479,14 +485,14 @@ void PacketHandler::readMIX0(const QString& packet, Player* plr)
     QString sernum = packet.mid( 2 ).left( 8 );
 
     //Send the next Packet to the Scene's Host.
-    plr->setTargetScene( sernum.toUInt( nullptr, 16 ) );
+    plr->setTargetScene( Helper::serNumtoInt( sernum, true ) );
     plr->setTargetType( PktTarget::SCENE );
 }
 
 void PacketHandler::readMIX1(const QString& packet, Player* plr)
 {
     QString sernum = packet.mid( 2 ).left( 8 );
-    plr->setSceneHost( sernum.toUInt( nullptr, 16 ) );
+    plr->setSceneHost( Helper::serNumtoInt( sernum, true ) );
 }
 
 void PacketHandler::readMIX2(const QString&, Player* plr)
@@ -499,7 +505,7 @@ void PacketHandler::readMIX3(const QString& packet, Player* plr)
 {
     QString sernum = packet.mid( 2 ).left( 8 );
 
-    plr->validateSerNum( server, sernum.toUInt( nullptr, 16 ) );
+    plr->validateSerNum( server, Helper::serNumtoInt( sernum, true ) );
     this->checkBannedInfo( plr );
 }
 
@@ -507,7 +513,7 @@ void PacketHandler::readMIX4(const QString& packet, Player* plr)
 {
     QString sernum = packet.mid( 2 ).left( 8 );
 
-    plr->setTargetSerNum( sernum.toUInt( nullptr, 16 ) );
+    plr->setTargetSerNum( Helper::serNumtoInt( sernum, true ) );
     plr->setTargetType( PktTarget::PLAYER );
 }
 
@@ -517,7 +523,7 @@ void PacketHandler::readMIX5(const QString& packet, Player* plr)
     if ( plr != nullptr )
     {
         if ( plr->getSernum_i() <= 0 )
-            plr->validateSerNum( server, sernum.toUInt( nullptr, 16 ) );
+            plr->validateSerNum( server, Helper::serNumtoInt( sernum, true ) );
 
         //Do not accept comments from User who have been muted.
         if ( !plr->getIsMuted() )
@@ -531,7 +537,7 @@ void PacketHandler::readMIX6(const QString& packet, Player* plr)
     if ( plr != nullptr )
     {
         if ( plr->getSernum_i() <= 0 )
-            plr->validateSerNum( server, sernum.toUInt( nullptr, 16 ) );
+            plr->validateSerNum( server, Helper::serNumtoInt( sernum, true ) );
 
         //Do not accept commands from User who have been muted.
         if ( !plr->getIsMuted() )
@@ -544,12 +550,12 @@ void PacketHandler::readMIX7(const QString& packet, Player* plr)
     if ( plr == nullptr )
         return;
 
-    QString pkt = packet;
+    QString pkt{ packet };
             pkt = pkt.mid( 2 );
             pkt = pkt.left( pkt.length() - 2 );
 
     //Check if the User is banned or requires authentication.
-    plr->validateSerNum( server, pkt.toUInt( nullptr, 16 ) );
+    plr->validateSerNum( server, Helper::serNumtoInt( pkt, true ) );
     this->checkBannedInfo( plr );
 }
 
@@ -573,13 +579,13 @@ void PacketHandler::handleSSVReadWrite(const QString& packet, Player* plr, const
     QString accessType{ "Read" };
     if ( Settings::getSetting( SKeys::Setting, SSubKeys::AllowSSV ).toBool() )
     {
-        QString pkt = packet;
-        pkt = pkt.mid( 10 );
-        pkt = pkt.left( pkt.length() - 2 );
-        QStringList vars = pkt.split( ',' );
+        QString pkt{ packet };
+                pkt = pkt.mid( 10 );
+                pkt = pkt.left( pkt.length() - 2 );
+        QStringList vars{ pkt.split( ',' ) };
 
         QSettings ssv( "mixVariableCache/" % vars.value( 0 ) % ".ini", QSettings::IniFormat );
-        QString sernum = pkt.mid( 2 ).left( 8 );
+        QString sernum{ pkt.mid( 2 ).left( 8 ) };
 
         QString val{ ":SR@V%1%2,%3,%4,%5\r\n" };
         QDir ssvDir( "mixVariableCache" );

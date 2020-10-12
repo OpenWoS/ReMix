@@ -30,7 +30,7 @@ PlrListWidget::PlrListWidget(QWidget* parent, ServerInfo* svr) :
     ui->setupUi(this);
 
     //Connect LogFile Signals to the Logger Class.
-    QObject::connect( this, &PlrListWidget::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot, Qt::QueuedConnection );
+    QObject::connect( this, &PlrListWidget::insertLogSignal, Logger::getInstance(), &Logger::insertLogSlot );
 
     server = svr;
 
@@ -54,6 +54,16 @@ PlrListWidget::PlrListWidget(QWidget* parent, ServerInfo* svr) :
     plrProxy->setDynamicSortFilter( true );
     plrProxy->setSourceModel( plrModel );
     ui->playerView->setModel( plrProxy );
+
+    ui->playerView->setColumnHidden( static_cast<int>( PlrCols::BioData ), true );
+    ui->playerView->setColumnWidth( static_cast<int>( PlrCols::BytesOut ), 120 );
+    ui->playerView->setColumnWidth( static_cast<int>( PlrCols::BytesIn ), 120 );
+    ui->playerView->setColumnWidth( static_cast<int>( PlrCols::IPPort ), 130 );
+    ui->playerView->setColumnWidth( static_cast<int>( PlrCols::SerNum ), 100 );
+    ui->playerView->setColumnWidth( static_cast<int>( PlrCols::Alias ), 70 );
+    ui->playerView->setColumnWidth( static_cast<int>( PlrCols::Time ), 50 );
+    ui->playerView->setColumnWidth( static_cast<int>( PlrCols::Age ), 80 );
+    ui->playerView->horizontalHeader()->setStretchLastSection( true );
 
     //Install Event Filter to enable Row-Deslection.
     ui->playerView->viewport()->installEventFilter( new TblEventFilter( ui->playerView, plrProxy ) );
@@ -86,7 +96,7 @@ QStandardItemModel* PlrListWidget::getPlrModel() const
 
 void PlrListWidget::resizeColumns()
 {
-    ui->playerView->resizeColumnsToContents();
+    //ui->playerView->resizeColumnsToContents();
 }
 
 void PlrListWidget::initContextMenu()
@@ -111,7 +121,7 @@ void PlrListWidget::on_playerView_customContextMenuRequested(const QPoint& pos)
     this->initContextMenu();
     if ( menuIndex.row() >= 0 )
     {
-        Player* plr = server->getPlayer( server->getQItemSlot( plrModel->item( menuIndex.row(), 0 ) ) );
+        Player* plr{ server->getPlayer( server->getQItemSlot( plrModel->item( menuIndex.row(), 0 ) ) ) };
         if ( plr != nullptr )
             menuTarget = plr;
 
@@ -166,7 +176,7 @@ void PlrListWidget::on_actionSendMessage_triggered()
                 messageDialog->deleteLater();
                 messageDialog = nullptr;
                 menuTarget = nullptr;
-            }, Qt::QueuedConnection );
+            } );
         }
 
         if ( !messageDialog->isVisible() )
@@ -192,7 +202,7 @@ void PlrListWidget::on_actionMakeAdmin_triggered()
         QString title{ "Create Admin:" };
         prompt =  "Are you certain you want to MAKE [ %1 ] a Remote Admin? \r\n\r\nPlease make sure you trust [ %1 ] as this will "
                   "allow the them to utilize Admin commands that can remove the ability for other users to connect to the Server.";
-        prompt = prompt.arg( Helper::serNumToIntStr( sernum ) );
+        prompt = prompt.arg( Helper::serNumToIntStr( sernum, true ) );
 
         if ( Helper::confirmAction( this, title, prompt ) )
         {
@@ -207,7 +217,7 @@ void PlrListWidget::on_actionMakeAdmin_triggered()
     {
         QString title{ "Revoke Admin:" };
         prompt = "Are you certain you want to REVOKE [ %1 ]'s powers?";
-        prompt = prompt.arg( Helper::serNumToIntStr( sernum ) );
+        prompt = prompt.arg( Helper::serNumToIntStr( sernum, true ) );
 
         if ( Helper::confirmAction( this, title, prompt ) )
         {

@@ -39,7 +39,7 @@ const QList<qint32> Helper::blueCodedList =
 
 QInputDialog* Helper::createInputDialog(QWidget* parent, QString& label, QInputDialog::InputMode mode, int width, int height)
 {
-    QInputDialog* dialog = new QInputDialog( parent );
+    QInputDialog* dialog{ new QInputDialog( parent ) };
                   dialog->setInputMode( mode );
                   dialog->setLabelText( label );
                   dialog->resize( width, height );
@@ -48,12 +48,12 @@ QInputDialog* Helper::createInputDialog(QWidget* parent, QString& label, QInputD
 
 qint32 Helper::strToInt(const QString& str, const int& base)
 {
-    bool base16 = ( base != 10 );
+    bool base16{ base != static_cast<int>( IntBase::DEC ) };
     bool ok{ false };
 
-    qint32 val = str.toInt( &ok, base );
+    qint32 val{ static_cast<qint32>( str.toUInt( &ok, base ) ) };
     if ( !ok && !base16 )
-        val = str.toInt( &ok, 16 );
+        val = str.toInt( &ok, static_cast<int>( IntBase::HEX ) );
 
     if ( !ok )
         val = -1;
@@ -68,12 +68,12 @@ QString Helper::intSToStr(QString& val, int base, int fill, QChar filler)
      * filler --- The char used to pad the string
      */
 
-    int val_i = val.toInt();
+    int val_i{ val.toInt() };
     QString str{ "%1" };
     if ( val_i > 0 )
         str = str.arg( val_i, fill, base, filler );
     else
-        str = str.arg( val.toInt( nullptr, 16 ), fill, base, filler );
+        str = str.arg( val.toInt( nullptr, static_cast<int>( IntBase::HEX ) ), fill, base, filler );
 
     return str.toUpper();
 }
@@ -145,21 +145,24 @@ void Helper::stripNewlines(QString& string)
         string = string.replace( "\n", " " );
 }
 
-void Helper::stripSerNumHeader(QString& sernum)
+QString Helper::stripSerNumHeader(const QString& sernum)
 {
+    QString serNum{ sernum };
     if ( strContainsStr( sernum, "SOUL" ) )
-        sernum = sernum.remove( "SOUL", Qt::CaseInsensitive ).trimmed();
+        serNum = serNum.remove( "SOUL", Qt::CaseInsensitive ).trimmed();
 
     if ( strContainsStr( sernum, "WP" ) )
-        sernum = sernum.remove( "WP", Qt::CaseInsensitive ).trimmed();
+        serNum = serNum.remove( "WP", Qt::CaseInsensitive ).trimmed();
+
+    return serNum;
 }
 
 QString Helper::sanitizeSerNum(const QString& value)
 {
     QString sernum{ value };
-    stripSerNumHeader( sernum );
+            sernum = stripSerNumHeader( sernum );
 
-    quint32 sernum_i{ sernum.toUInt( nullptr, 16 ) };
+    quint32 sernum_i{ sernum.toUInt( nullptr, static_cast<int>( IntBase::HEX ) ) };
     if ( sernum_i & MIN_HEX_SERNUM )
         return value;
 
@@ -168,31 +171,31 @@ QString Helper::sanitizeSerNum(const QString& value)
 
 QString Helper::serNumToHexStr(QString sernum, int fillAmt)
 {
-    stripSerNumHeader( sernum );
+    sernum = stripSerNumHeader( sernum );
 
-    quint32 sernum_i{ sernum.toUInt( nullptr, 16 ) };
+    qint32 sernum_i{ static_cast<qint32>( sernum.toUInt( nullptr, static_cast<int>( IntBase::HEX ) ) ) };
     QString result{ "" };
 
     if ( !( sernum_i & MIN_HEX_SERNUM ) )
     {
         bool ok{ false };
-        sernum.toUInt( &ok, 10 );
+        sernum.toInt( &ok, static_cast<int>( IntBase::DEC ) );
 
         if ( !ok )
         {
-            result = intToStr( sernum.toUInt( &ok, 16 ), 16, fillAmt );
+            result = intToStr( sernum.toUInt( &ok, static_cast<int>( IntBase::HEX ) ), static_cast<int>( IntBase::HEX ), fillAmt );
             if ( !ok )
-                result = intToStr( sernum.toInt( &ok, 16 ), 16, fillAmt );
+                result = intToStr( sernum.toInt( &ok, static_cast<int>( IntBase::HEX ) ), static_cast<int>( IntBase::HEX ), fillAmt );
         }
         else
         {
-            result = intToStr( sernum.toUInt( &ok, 10 ), 16, fillAmt );
+            result = intToStr( sernum.toUInt( &ok, static_cast<int>( IntBase::DEC ) ), static_cast<int>( IntBase::HEX ), fillAmt );
             if ( !ok )
-                result = intToStr( sernum.toInt( &ok, 10 ), 16, fillAmt );
+                result = intToStr( sernum.toInt( &ok, static_cast<int>( IntBase::DEC ) ), static_cast<int>( IntBase::HEX ), fillAmt );
         }
     }
     else
-        result = intToStr( sernum_i, 16, fillAmt );
+        result = intToStr( sernum_i, static_cast<int>( IntBase::HEX ), fillAmt );
 
     if ( result.length() > 8 )
         result = result.mid( result.length() - 8 );
@@ -200,15 +203,22 @@ QString Helper::serNumToHexStr(QString sernum, int fillAmt)
     return result;
 }
 
-QString Helper::serNumToIntStr(const QString& sernum)
+QString Helper::serNumToIntStr(const QString& sernum, const bool& isHex)
 {
-    quint32 sernum_i{ sernum.toUInt( nullptr, 16 ) };
+    QString serNum{ sernum };
+    if ( isHex
+      && ( serNum.length() > 8 ) )
+    {
+        serNum = serNum.mid( serNum.length() - 8 );
+    }
+
+    qint32 sernum_i{ serNumtoInt( serNum, isHex ) };
     QString retn{ "" };
 
-    if ( !( sernum_i & MIN_HEX_SERNUM ) )
-        retn = QString( "SOUL %1" ).arg( intToStr( sernum_i, 10 ) );
+    if ( !( sernum_i & MIN_HEX_SERNUM ) || !isHex )
+        retn = QString( "SOUL %1" ).arg( intToStr( sernum_i, static_cast<int>( IntBase::DEC ) ) );
     else
-        retn = QString( "%1" ).arg( intToStr( sernum_i, 16 ) );
+        retn = QString( "%1" ).arg( intToStr( sernum_i, static_cast<int>( IntBase::HEX ) ) );
 
     if ( !strStartsWithStr( retn, "SOUL" )
       && retn.length() > 8 )
@@ -218,27 +228,32 @@ QString Helper::serNumToIntStr(const QString& sernum)
     return retn;
 }
 
-qint32 Helper::serNumtoInt(QString& sernum)
+qint32 Helper::serNumtoInt(const QString& sernum, const bool& isHex)
 {
-    stripSerNumHeader( sernum );
 
-    qint32 sernum_i{ sernum.toInt( nullptr, 16 ) };
-    if ( sernum_i & MIN_HEX_SERNUM )
-        sernum_i = strToInt( sernum, 16 );
-    else
-        sernum_i = strToInt( sernum, 10 );
+    QString serNum{ sernum };
+            serNum = stripSerNumHeader( sernum );
 
+    bool ok{ false };
+    qint32 sernum_i{ static_cast<qint32>( serNum.toUInt( &ok, static_cast<int>( IntBase::HEX ) ) ) };
+    if ( !ok )
+    {
+        if ( isHex )
+            sernum_i = strToInt( serNum, static_cast<int>( IntBase::HEX ) );
+        else
+            sernum_i = strToInt( serNum, static_cast<int>( IntBase::DEC ) );
+    }
     return sernum_i;
 }
 
-bool Helper::isBlueCodedSerNum(const quint32& sernum)
+bool Helper::isBlueCodedSerNum(const qint32& sernum)
 {
-    return blueCodedList.contains( static_cast<int>( sernum ) );
+    return blueCodedList.contains( sernum );
 }
 
 bool Helper::confirmAction(QWidget* parent, QString& title, QString& prompt)
 {
-    qint32 value = QMessageBox::question( parent, title, prompt, QMessageBox::Yes | QMessageBox::No, QMessageBox::No );
+    qint32 value{ QMessageBox::question( parent, title, prompt, QMessageBox::Yes | QMessageBox::No, QMessageBox::No ) };
     return value == QMessageBox::Yes;
 }
 
@@ -247,12 +262,12 @@ qint32 Helper::warningMessage(QWidget* parent, const QString& title, const QStri
     return QMessageBox::warning( parent, title, prompt, QMessageBox::NoButton, QMessageBox::Ok );
 }
 
-QString Helper::getTextResponse(QWidget* parent, const QString& title, const QString& prompt, const QString& defaultInput, bool* ok, int type)
+QString Helper::getTextResponse(QWidget* parent, const QString& title, const QString& prompt, const QString& defaultInput, bool* ok, const MessageBox& type)
 {
     QString response{ "" };
-    if ( type == 0 )    //Single-line message.
+    if ( type == MessageBox::SingleLine )    //Single-line message.
         response = QInputDialog::getText( parent, title, prompt, QLineEdit::Normal, defaultInput, ok );
-    else if ( type == 1 )   //Multi-line message.
+    else if ( type == MessageBox::MultiLine )   //Multi-line message.
         response = QInputDialog::getMultiLineText( parent, title, prompt, defaultInput, ok );
 
     return response;
@@ -303,8 +318,8 @@ QString Helper::genPwdSalt(const qint32& length)
 
 bool Helper::validateSalt(QString& salt)
 {
-    QSettings* userData = User::getUserData();
-    QStringList groups = userData->childGroups();
+    QSettings* userData{ User::getUserData() };
+    QStringList groups{ userData->childGroups() };
     QString j{ "" };
 
     for ( int i = 0; i < groups.count(); ++i )
@@ -321,8 +336,8 @@ bool Helper::naturalSort(QString& left, QString& right, bool& result)
 {
     do
     {
-        int posL = left.indexOf( QRegExp( "[0-9]" ) );
-        int posR = right.indexOf( QRegExp( "[0-9]" ) );
+        int posL{ left.indexOf( QRegExp( "[0-9]" ) ) };
+        int posR{ right.indexOf( QRegExp( "[0-9]" ) ) };
         if ( posL == -1 || posR == -1 )
             break;
 
@@ -369,7 +384,7 @@ bool Helper::naturalSort(QString& left, QString& right, bool& result)
 void Helper::delay(const qint32& time)
 {
     //Delay the next Port refresh by /time/ seconds.
-    QTime delayedTime = QTime::currentTime().addSecs( time );
+    QTime delayedTime{ QTime::currentTime().addSecs( time ) };
     while ( QTime::currentTime() < delayedTime )
     {
         QCoreApplication::processEvents( QEventLoop::AllEvents, 100 );
@@ -378,13 +393,13 @@ void Helper::delay(const qint32& time)
 
 QHostAddress Helper::getPrivateIP()
 {
-    QList<QHostAddress> ipList = QNetworkInterface::allAddresses();
+    QList<QHostAddress> ipList{ QNetworkInterface::allAddresses() };
 
     //Default to our localhost address if nothing valid is found.
     QHostAddress ipAddress{ QHostAddress::Null };
-    for ( const auto& ip : ipList )
+    for ( const QHostAddress& ip : ipList )
     {
-        QString tmp = ip.toString();
+        QString tmp{ ip.toString() };
 
         if ( ip != QHostAddress::LocalHost    //Remove localhost addresses.
           && ip.toIPv4Address()    //Remove any ipv6 addresses.
@@ -414,44 +429,49 @@ void Helper::getSynRealData(ServerInfo* svr)
 
     QFileInfo synRealFile( "synReal.ini" );
 
-    bool downloadFile = true;
+    bool downloadFile{ true };
     if ( synRealFile.exists() )
     {
-        qint64 curTime = static_cast<qint64>( QDateTime::currentDateTime().toMSecsSinceEpoch() / 1000 );
-        qint64 modTime = static_cast<qint64>( synRealFile.lastModified().toMSecsSinceEpoch() / 1000 );
+        if ( synRealFile.size() != 0 ) //File exists and contains data.
+        {
+            qint64 curTime = static_cast<qint64>( QDateTime::currentDateTime().toMSecsSinceEpoch() / 1000 );
+            qint64 modTime = static_cast<qint64>( synRealFile.lastModified().toMSecsSinceEpoch() / 1000 );
 
-        //Check if the file is 48 hours old and set our bool.
-        downloadFile = ( curTime - modTime >= 172800 );
+            //Check if the file is 24 hours old and set our bool.
+            downloadFile = ( curTime - modTime >= 86400 );
+        }
     }
 
     //The file was older than 48 hours or did not exist. Request a fresh copy.
     if ( downloadFile )
     {
-        auto* socket = new QTcpSocket;
-        QUrl url( svr->getMasterInfoHost() );
+        QTcpSocket* socket{ new QTcpSocket() };
+        QUrl url{ svr->getMasterInfoHost() };
 
         socket->connectToHost( url.host(), 80 );
         QObject::connect( socket, &QTcpSocket::connected, socket,
         [=]()
         {
             socket->write( QString( "GET %1\r\n" ) .arg( svr->getMasterInfoHost() ).toLatin1() );
-        }, Qt::QueuedConnection );
+        } );
 
         QObject::connect( socket, &QTcpSocket::readyRead, socket,
         [=]()
         {
             QFile synreal( "synReal.ini" );
-            if ( synreal.open( QIODevice::WriteOnly ) )
+            if ( synreal.open( QIODevice::WriteOnly | QIODevice::Append ) )
             {
                 socket->waitForReadyRead();
                 synreal.write( socket->readAll() );
             }
 
+            synreal.flush();
             synreal.close();
 
             QSettings settings( "synReal.ini", QSettings::IniFormat );
-            QString str = settings.value( svr->getGameName() % "/master" ).toString();
-            int index = str.indexOf( ":" );
+            QString str{ settings.value( svr->getGameName() % "/master" ).toString() };
+
+            int index{ str.indexOf( ":" ) };
             if ( index > 0 )
             {
                 svr->setMasterIP( str.left( index ) );
@@ -463,9 +483,8 @@ void Helper::getSynRealData(ServerInfo* svr)
                                  .arg( svr->getGameName() );
                 Logger::getInstance()->insertLog( svr->getServerName(), msg, LogTypes::USAGE, true, true );
             }
-        }, Qt::QueuedConnection );
-
-        QObject::connect( socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater, Qt::QueuedConnection );
+        } );
+        QObject::connect( socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater );
     }
     else
     {
@@ -521,21 +540,21 @@ QString Helper::getTimeAsString(const quint64& time)
     if ( date == 0 )
         date = QDateTime::currentDateTimeUtc().toTime_t();
 
-    return QDateTime::fromTime_t( static_cast<uint>( date ) )
-            .toString( "ddd MMM dd HH:mm:ss yyyy" );
+    return QDateTime::fromTime_t( static_cast<uint>( date ) ).toString( "ddd MMM dd HH:mm:ss yyyy" );
 }
 
-QString Helper::getTimeFormat(const quint64& time)
+QString Helper::getTimeFormat(const qint64& time)
 {
-    return QString( "%1:%2:%3" )
-            .arg( getTimeIntFormat( time, TimeFormat::Hours ), 2, 10, QChar( '0' ) )
-            .arg( getTimeIntFormat( time, TimeFormat::Minutes ), 2, 10, QChar( '0' ) )
-            .arg( getTimeIntFormat( time, TimeFormat::Seconds ), 2, 10, QChar( '0' ) );
+    QString format{ "%1:%2:%3" };
+            format = format.arg( getTimeIntFormat( time, TimeFormat::Hours ), 2, static_cast<int>( IntBase::DEC ), QChar( '0' ) )
+                           .arg( getTimeIntFormat( time, TimeFormat::Minutes ), 2, static_cast<int>( IntBase::DEC ), QChar( '0' ) )
+                           .arg( getTimeIntFormat( time, TimeFormat::Seconds ), 2, static_cast<int>( IntBase::DEC ), QChar( '0' ) );
+    return format;
 }
 
-quint64 Helper::getTimeIntFormat(const quint64& time, const TimeFormat& format)
+qint64 Helper::getTimeIntFormat(const qint64& time, const TimeFormat& format)
 {
-    quint64 retn{ time };
+    qint64 retn{ time };
     switch ( format )
     {
         case TimeFormat::Hours:
